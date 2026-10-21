@@ -1,9 +1,9 @@
 import { Icon, type IconName } from './Icon';
 
-export type TabId = 'today' | 'summary' | 'calendar' | 'accounts' | 'settings';
+export type TabId = 'home' | 'summary' | 'calendar' | 'accounts' | 'settings';
 
 const items: Array<{ id: TabId; label: string; icon: IconName }> = [
-  { id: 'today', label: 'Hoy', icon: 'clock' },
+  { id: 'home', label: 'Inicio', icon: 'home' },
   { id: 'summary', label: 'Resumen', icon: 'chart' },
   { id: 'calendar', label: 'Calendario', icon: 'calendar' },
   { id: 'accounts', label: 'Cuentas', icon: 'briefcase' },

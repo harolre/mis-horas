@@ -1,31 +1,184 @@
-/* Hoy --------------------------------------------------------------------- */
-.date-nav {
-  display: flex;
+/* Inicio ------------------------------------------------------------------ */
+.home-hero .hero-pill-action {
+  margin-top: 0;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+
+.home-hero .hero-pill-action:active {
+  transform: scale(0.97);
+}
+
+.week-card {
+  overflow: hidden;
+}
+
+.week-day {
+  border-bottom: 1px solid var(--border);
+}
+
+.week-day:last-child {
+  border-bottom: 0;
+}
+
+.week-day-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 18px;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  text-align: left;
+  transition: background 0.15s ease;
 }
 
-.date-display {
-  flex: 1;
+.week-day-summary:active {
+  background: var(--surface-2);
+}
+
+.week-day.open .week-day-summary {
+  background: var(--primary-soft);
+}
+
+.week-day.today .week-day-name {
+  color: var(--primary);
+}
+
+.week-day-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
-  text-align: center;
 }
 
-.date-display-label {
-  font-size: 1rem;
+.week-day-name {
+  font-size: 0.9rem;
   font-weight: 750;
-  letter-spacing: -0.02em;
-  white-space: nowrap;
+  letter-spacing: -0.01em;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.date-display-sub {
-  margin-top: 1px;
-  font-size: 0.72rem;
+.week-day-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-size: 0.66rem;
   color: var(--text-3);
 }
 
+.week-day-meta .badge {
+  padding: 2px 6px;
+  font-size: 0.6rem;
+}
+
+.week-day-date {
+  font-variant-numeric: tabular-nums;
+}
+
+.week-day-attach {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 650;
+  color: var(--text-3);
+}
+
+.week-day-hours {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  min-width: 58px;
+  text-align: right;
+}
+
+.week-day-hours strong {
+  font-size: 0.86rem;
+  font-weight: 750;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.week-day-hours > span {
+  font-size: 0.62rem;
+  line-height: 1.2;
+  color: var(--text-3);
+}
+
+.week-day-hours .week-day-excess {
+  color: var(--warning);
+  font-weight: 750;
+}
+
+.week-day-chevron {
+  color: var(--text-3);
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.week-day.open .week-day-chevron {
+  color: var(--primary);
+  transform: rotate(90deg);
+}
+
+.week-day-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0 14px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.day-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 14px;
+}
+
+.day-status-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.day-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.day-movements-block .empty {
+  padding: 18px 12px;
+}
+
+.day-movement-list .movement-row {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.day-attachments-block .attachment-section-head {
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.day-note-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Día --------------------------------------------------------------------- */
 .date-input-hidden {
   position: absolute;
   width: 1px;
@@ -47,28 +200,6 @@
   color: var(--text-3);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-}
-
-.week-strip {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: 13px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-}
-
-.week-strip .progress {
-  flex: 1;
-  height: 6px;
-}
-
-.week-strip-text {
-  font-size: 0.74rem;
-  color: var(--text-2);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
 .movement-row {

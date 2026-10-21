@@ -481,6 +481,21 @@
   color: var(--primary);
 }
 
+.badge.vacation {
+  background: var(--vacation-soft);
+  color: var(--vacation);
+}
+
+.badge.holiday {
+  background: var(--holiday-soft);
+  color: var(--holiday);
+}
+
+.badge.sick {
+  background: var(--sick-soft);
+  color: var(--sick);
+}
+
 .badge.success {
   background: var(--success-soft);
   color: var(--success);

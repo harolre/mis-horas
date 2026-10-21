@@ -6,11 +6,13 @@ No tiene backend, no sincroniza datos y no envía información a ningún servido
 
 ## Características
 
+- Vista semanal en **Inicio**, con los siete días y el día seleccionado desplegable.
 - Registro de tramos de trabajo por día, con hora de inicio, fin, descanso y cuenta.
 - Varias cuentas con color, archivo y totales por cuenta.
 - Objetivo semanal global, con horas distintas para cada día de la semana.
 - Excepciones de objetivo para fechas concretas.
 - Cálculo de horas extra semanales: `max(0, horas de la semana − objetivo de la semana)`.
+- Exceso diario informativo cuando un día supera su objetivo, sin alterar el cálculo semanal del extra.
 - Resumen semanal, mensual y anual, con desglose por cuenta.
 - Calendario mensual con indicadores de horas, ausencias y adjuntos.
 - Estados de día informativos: trabajo, vacaciones, festivo y baja. Un día marcado como ausencia no admite tramos y no altera los totales.
@@ -136,7 +138,7 @@ Formato de seguridad de las copias:
 - Los PDF con texto suficiente se optimizan sin pérdida cuando el resultado es más pequeño; los PDF sin texto se rasterizan si así se reduce el tamaño.
 - Un PDF protegido con contraseña o dañado se rechaza.
 
-Los adjuntos pertenecen al día, no a un tramo concreto. Se pueden previsualizar, descargar, compartir y eliminar desde **Hoy**.
+Los adjuntos pertenecen al día, no a un tramo concreto. Se añaden desde el detalle del día seleccionado en **Inicio** y se pueden previsualizar, descargar, compartir y eliminar allí mismo.
 
 ## Cálculos
 
@@ -144,6 +146,7 @@ Los adjuntos pertenecen al día, no a un tramo concreto. Se pueden previsualizar
 - El objetivo diario se toma de las horas configuradas para ese día de la semana o de una excepción de fecha.
 - El objetivo semanal es la suma de los objetivos de los días de la semana.
 - Las horas extra de una semana son las horas trabajadas que superan el objetivo semanal, nunca negativas.
+- El exceso de un día sobre su objetivo se muestra como información en **Inicio**, pero no se suma como extra si la semana no supera su objetivo global.
 - En los resúmenes mensual y anual, las horas extra se suman por semanas cuyo primer día cae dentro del periodo.
 - Las ausencias son informativas: no restan horas ni cambian el objetivo.
 
@@ -156,7 +159,7 @@ src/
   components/    Componentes comunes de interfaz
   db/            Dexie, repositorios, validación y datos por defecto
   domain/        Fechas, duraciones, totales y cálculos
-  features/      Pantallas: hoy, resumen, calendario, cuentas, ajustes
+  features/      Pantallas: inicio, resumen, calendario, cuentas, ajustes
   styles/        Tokens y estilos CSS
   test/          Configuración de pruebas
 public/

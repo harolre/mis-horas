@@ -381,14 +381,30 @@ export async function deleteDayData(
     db.attachmentFiles,
     async () => {
       await db.movements.where('date').equals(date).delete();
+      let remainingAttachments = 0;
       if (includeAttachments) {
         const attachments = await db.attachments.where('date').equals(date).toArray();
         for (const attachment of attachments) {
           await db.attachmentFiles.delete(attachment.id);
           await db.attachments.delete(attachment.id);
         }
+      } else {
+        remainingAttachments = await db.attachments
+          .where('date')
+          .equals(date)
+          .count();
       }
-      await db.days.delete(date);
+
+      if (remainingAttachments > 0) {
+        await db.days.put({
+          date,
+          kind: 'work',
+          attachmentCount: remainingAttachments,
+          updatedAt: Date.now(),
+        });
+      } else {
+        await db.days.delete(date);
+      }
     },
   );
 }

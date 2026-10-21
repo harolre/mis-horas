@@ -7,6 +7,7 @@ import {
   attachmentStats,
   deleteAccount,
   deleteAttachment,
+  deleteDayData,
   deleteMovement,
   listAttachments,
   listMovementsByDate,
@@ -95,6 +96,42 @@ describe('repositorio', () => {
     stats = await attachmentStats();
     expect(stats.count).toBe(0);
     expect((await db.days.get('2026-10-21'))?.attachmentCount).toBe(0);
+    expect(await listAttachments('2026-10-21')).toHaveLength(0);
+  });
+
+  it('conserva el día al borrar datos si quedan adjuntos', async () => {
+    await setDayKind('2026-10-21', 'vacation', 'Nota');
+    await addAttachment({
+      date: '2026-10-21',
+      name: 'justificante.pdf',
+      mime: 'application/pdf',
+      size: 20,
+      thumb: null,
+      blob: new Blob([new Uint8Array(20)]),
+    });
+
+    await deleteDayData('2026-10-21', false);
+
+    const day = await db.days.get('2026-10-21');
+    expect(day?.kind).toBe('work');
+    expect(day?.note).toBeUndefined();
+    expect(day?.attachmentCount).toBe(1);
+    expect(await listAttachments('2026-10-21')).toHaveLength(1);
+  });
+
+  it('elimina el día y sus adjuntos si se pide', async () => {
+    await addAttachment({
+      date: '2026-10-21',
+      name: 'justificante.pdf',
+      mime: 'application/pdf',
+      size: 20,
+      thumb: null,
+      blob: new Blob([new Uint8Array(20)]),
+    });
+
+    await deleteDayData('2026-10-21', true);
+
+    expect(await db.days.get('2026-10-21')).toBeUndefined();
     expect(await listAttachments('2026-10-21')).toHaveLength(0);
   });
 

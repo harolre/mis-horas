@@ -22,7 +22,7 @@ function initialTheme(): ThemeMode {
 }
 
 export function App() {
-  const [tab, setTab] = useState<TabId>('today');
+  const [tab, setTab] = useState<TabId>('home');
   const [date, setDate] = useState(todayISO());
   const [theme, setTheme] = useState<ThemeMode>(initialTheme);
 
@@ -57,13 +57,13 @@ export function App() {
 
   function selectDate(nextDate: string) {
     setDate(nextDate);
-    setTab('today');
+    setTab('home');
   }
 
   return (
     <div className="app-shell">
       <main className="app-main">
-        {tab === 'today' ? (
+        {tab === 'home' ? (
           <TodayScreen
             date={date}
             onDateChange={setDate}

@@ -1,17 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import type { Account, Attachment, DayKind, Movement } from '../../types';
+import type {
+  Account,
+  Attachment,
+  DayEntry,
+  DayKind,
+  Movement,
+} from '../../types';
 import {
   addAttachment,
   attachmentStats,
   deleteAttachment,
   deleteDayData,
   deleteMovement,
-  getDay,
   getSettings,
   listAccounts,
   listAttachments,
-  listMovementsByDate,
+  listDaysRange,
   listMovementsRange,
   setDayKind,
   setDayNote,
@@ -19,6 +24,9 @@ import {
 import {
   addDays,
   formatLongDate,
+  formatShortDate,
+  formatWeekdayLong,
+  formatWeekTitle,
   startOfWeek,
   todayISO,
 } from '../../domain/date';
@@ -29,7 +37,7 @@ import {
   formatFileSize,
   formatTime,
 } from '../../domain/time';
-import { targetForDate, weekTotals } from '../../domain/totals';
+import { daysOfWeek, weekTotals } from '../../domain/totals';
 import { checkTotalLimit, prepareAttachment } from '../../attachments/process';
 import type { AttachmentProgress } from '../../attachments/process';
 import { ScreenHeader } from '../../components/ScreenHeader';
@@ -75,10 +83,20 @@ function kindInfo(kind: DayKind) {
 }
 
 interface ProcessingState {
+  date: string;
   name: string;
   percent: number;
   stage: string;
   detail?: string;
+}
+
+interface WeekDayRow {
+  date: string;
+  worked: number;
+  target: number;
+  excess: number;
+  kind: DayKind;
+  attachmentCount: number;
 }
 
 export function TodayScreen({
@@ -91,32 +109,29 @@ export function TodayScreen({
   const dateInputRef = useRef<HTMLInputElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  const settings = useLiveQuery(() => getSettings(), [], undefined);
+  const weekStart = startOfWeek(date, settings?.weekStart ?? 1);
+  const weekEnd = addDays(weekStart, 6);
+
   const movements = useLiveQuery(
-    () => listMovementsByDate(date),
-    [date],
+    () => listMovementsRange(weekStart, weekEnd),
+    [weekStart, weekEnd],
     [] as Movement[],
+  );
+  const days = useLiveQuery(
+    () => listDaysRange(weekStart, weekEnd),
+    [weekStart, weekEnd],
+    [] as DayEntry[],
   );
   const accounts = useLiveQuery(
     () => listAccounts(true),
     [],
     [] as Account[],
   );
-  const day = useLiveQuery(() => getDay(date), [date], undefined);
-  const settings = useLiveQuery(() => getSettings(), [], undefined);
   const attachments = useLiveQuery(
     () => listAttachments(date),
     [date],
     [] as Attachment[],
-  );
-  const week = useLiveQuery(
-    async () => {
-      if (!settings) return null;
-      const start = startOfWeek(date, settings.weekStart);
-      const list = await listMovementsRange(start, addDays(start, 6));
-      return weekTotals(date, list, settings);
-    },
-    [date, settings],
-    null,
   );
 
   const [noteDraft, setNoteDraft] = useState('');
@@ -131,25 +146,49 @@ export function TodayScreen({
   const [busy, setBusy] = useState(false);
   const [processing, setProcessing] = useState<ProcessingState | null>(null);
 
+  const dayEntries = new Map(days.map((entry) => [entry.date, entry]));
+  const baseRows = settings
+    ? daysOfWeek(weekStart, movements, settings)
+    : Array.from({ length: 7 }, (_, index) => ({
+        date: addDays(weekStart, index),
+        worked: 0,
+        target: 0,
+      }));
+  const rows: WeekDayRow[] = baseRows.map((row) => {
+    const entry = dayEntries.get(row.date);
+    return {
+      ...row,
+      excess: row.target > 0 ? Math.max(0, row.worked - row.target) : 0,
+      kind: entry?.kind ?? 'work',
+      attachmentCount: entry?.attachmentCount ?? 0,
+    };
+  });
+
+  const day = dayEntries.get(date);
+  const dayKind: DayKind = day?.kind ?? 'work';
+  const info = kindInfo(dayKind);
+  const selectedRow = rows.find((row) => row.date === date);
+  const selectedWorked = selectedRow?.worked ?? 0;
+  const selectedTarget = selectedRow?.target ?? 0;
+  const selectedExcess = selectedRow?.excess ?? 0;
+  const selectedMovements = movements
+    .filter((movement) => movement.date === date)
+    .sort((a, b) => a.startMin - b.startMin || a.createdAt - b.createdAt);
+  const week = settings ? weekTotals(weekStart, movements, settings) : null;
+  const daysWithHours = rows.filter((row) => row.worked > 0).length;
+  const activeAccounts = accounts.filter((account) => !account.archived);
+  const accountMap = new Map(accounts.map((account) => [account.id, account]));
+  const today = todayISO();
+  const isToday = date === today;
+  const hasData =
+    selectedMovements.length > 0 || Boolean(day) || attachments.length > 0;
+
   useEffect(() => {
     setNoteDraft(day?.note ?? '');
   }, [date, day?.note]);
 
-  const dayKind: DayKind = day?.kind ?? 'work';
-  const info = kindInfo(dayKind);
-  const activeAccounts = accounts.filter((account) => !account.archived);
-  const accountMap = new Map(accounts.map((account) => [account.id, account]));
-  const worked = movements.reduce(
-    (total, movement) => total + durationMinutes(movement),
-    0,
-  );
-  const target = settings ? targetForDate(date, settings) : 0;
-  const isToday = date === todayISO();
-  const hasData =
-    movements.length > 0 || Boolean(day) || attachments.length > 0;
-
-  function shiftDay(amount: number) {
-    onDateChange(addDays(date, amount));
+  function shiftWeek(amount: number) {
+    onDateChange(addDays(date, amount * 7));
   }
 
   function openDatePicker() {
@@ -166,12 +205,14 @@ export function TodayScreen({
 
   async function changeKind(kind: DayKind) {
     if (kind === dayKind) return;
-    if (kind !== 'work' && movements.length > 0) {
+    if (kind !== 'work' && selectedMovements.length > 0) {
       toast('Borra los tramos antes de marcar una ausencia.', 'error');
       return;
     }
     try {
-      if (kind === 'work' && !day?.note && attachments.length === 0) {
+      const hasAttachments =
+        attachments.length > 0 || (day?.attachmentCount ?? 0) > 0;
+      if (kind === 'work' && !day?.note && !hasAttachments) {
         await deleteDayData(date, false);
       } else {
         await setDayKind(date, kind, day?.note);
@@ -241,6 +282,7 @@ export function TodayScreen({
 
   async function handleFiles(files: FileList | null) {
     const list = Array.from(files ?? []);
+    const targetDate = date;
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (list.length === 0) return;
 
@@ -253,7 +295,12 @@ export function TodayScreen({
     for (const file of list) {
       const controller = new AbortController();
       abortRef.current = controller;
-      setProcessing({ name: file.name, percent: 0, stage: 'Preparando…' });
+      setProcessing({
+        date: targetDate,
+        name: file.name,
+        percent: 0,
+        stage: 'Preparando…',
+      });
       try {
         const prepared = await prepareAttachment(file, {
           signal: controller.signal,
@@ -267,6 +314,7 @@ export function TodayScreen({
                     ? 'Guardando…'
                     : 'Leyendo…';
             setProcessing({
+              date: targetDate,
               name: file.name,
               percent: progress.percent,
               stage,
@@ -279,7 +327,7 @@ export function TodayScreen({
         if (limitError) throw new Error(limitError);
 
         await addAttachment({
-          date,
+          date: targetDate,
           name: prepared.name,
           mime: prepared.mime,
           size: prepared.finalSize,
@@ -340,15 +388,15 @@ export function TodayScreen({
       />
 
       <ScreenHeader
-        title={isToday ? 'Hoy' : 'Día'}
-        subtitle={formatLongDate(date)}
+        title="Inicio"
+        subtitle={formatWeekTitle(weekStart, weekEnd)}
         actions={
           <>
             {!isToday ? (
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
-                onClick={() => onDateChange(todayISO())}
+                onClick={() => onDateChange(today)}
               >
                 Hoy
               </button>
@@ -356,8 +404,8 @@ export function TodayScreen({
             <button
               type="button"
               className="icon-button"
-              onClick={() => shiftDay(-1)}
-              aria-label="Día anterior"
+              onClick={() => shiftWeek(-1)}
+              aria-label="Semana anterior"
             >
               <Icon name="chevron-left" size={19} />
             </button>
@@ -372,8 +420,8 @@ export function TodayScreen({
             <button
               type="button"
               className="icon-button"
-              onClick={() => shiftDay(1)}
-              aria-label="Día siguiente"
+              onClick={() => shiftWeek(1)}
+              aria-label="Semana siguiente"
             >
               <Icon name="chevron-right" size={19} />
             </button>
@@ -381,191 +429,54 @@ export function TodayScreen({
         }
       />
 
-      <section className="hero" aria-label="Resumen del día">
+      <section className="hero home-hero" aria-label="Resumen de la semana">
         <div className="row-between">
-          <span className="hero-label">Total del día</span>
-          <span className="hero-pill">
-            <Icon name="clock" size={13} />
-            {info.description}
-          </span>
+          <span className="hero-label">Total de la semana</span>
+          <button
+            type="button"
+            className="hero-pill hero-pill-action"
+            onClick={onOpenSummary}
+            aria-label="Ver resumen de la semana"
+          >
+            <Icon name="chart" size={13} />
+            Resumen
+          </button>
         </div>
-        <div className="hero-value">{formatDuration(worked)}</div>
+        <div className="hero-value">{week ? formatDuration(week.worked) : '—'}</div>
         <div className="hero-meta">
-          {target > 0 ? (
-            <>
-              <span>Objetivo {formatDuration(target)}</span>
+          <span>
+            {daysWithHours === 0
+              ? 'Sin horas registradas'
+              : `${daysWithHours} ${
+                  daysWithHours === 1 ? 'día' : 'días'
+                } con horas`}
+          </span>
+          {week ? (
+            week.target > 0 ? (
+              <>
+                <span>Objetivo {formatDuration(week.target)}</span>
+                <span>
+                  {week.extra > 0
+                    ? `Extra semanal +${formatDuration(week.extra)}`
+                    : week.diff < 0
+                      ? `Faltan ${formatDuration(-week.diff)}`
+                      : 'Objetivo semanal cumplido'}
+                </span>
+              </>
+            ) : (
               <span>
-                {worked >= target
-                  ? `+${formatDuration(worked - target)}`
-                  : `Faltan ${formatDuration(target - worked)}`}
+                {week.extra > 0
+                  ? `Extra semanal +${formatDuration(week.extra)}`
+                  : 'Sin objetivo semanal'}
               </span>
-            </>
-          ) : (
-            <span>Sin objetivo para este día</span>
-          )}
+            )
+          ) : null}
         </div>
         <div className="hero-footer">
-          <ProgressBar value={target > 0 ? worked / target : 0} />
-        </div>
-      </section>
-
-      {dayKind !== 'work' ? (
-        <div className="banner warning">
-          <Icon name="info" size={16} />
-          <span>
-            Día marcado como <strong>{info.label.toLowerCase()}</strong>. Es
-            informativo: no altera los totales y no admite tramos de trabajo.
-          </span>
-        </div>
-      ) : null}
-
-      {week ? (
-        <button
-          type="button"
-          className="week-strip"
-          onClick={onOpenSummary}
-          aria-label="Ver resumen de la semana"
-        >
-          <span className="week-strip-text">Semana</span>
           <ProgressBar
-            value={week.target > 0 ? week.worked / week.target : 0}
+            value={week && week.target > 0 ? week.worked / week.target : 0}
           />
-          <span className="week-strip-text">
-            {formatCompactDuration(week.worked)} /{' '}
-            {formatCompactDuration(week.target)}
-          </span>
-          {week.extra > 0 ? (
-            <span className="badge warning">+{formatDuration(week.extra)}</span>
-          ) : null}
-          <Icon name="chevron-right" size={15} />
-        </button>
-      ) : null}
-
-      <section className="card card-pad stack-sm">
-        <div className="day-status-row">
-          <span className="day-status-label">Estado del día</span>
-          <span className="badge">{info.description}</span>
         </div>
-        <div className="chip-row">
-          {DAY_KINDS.map((kind) => (
-            <button
-              key={kind.value}
-              type="button"
-              className={`chip ${kind.chipClass}`}
-              aria-pressed={dayKind === kind.value}
-              onClick={() => void changeKind(kind.value)}
-            >
-              {kind.label}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="card">
-        <div className="card-header">
-          <div>
-            <div className="card-title">Tramos</div>
-            <div className="card-subtitle">
-              {movements.length === 0
-                ? 'Sin registros'
-                : `${movements.length} ${
-                    movements.length === 1 ? 'tramo' : 'tramos'
-                  } · ${formatDuration(worked)}`}
-            </div>
-          </div>
-          {dayKind === 'work' ? (
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={() => setForm({})}
-              disabled={activeAccounts.length === 0}
-            >
-              <Icon name="plus" size={16} />
-              Añadir
-            </button>
-          ) : null}
-        </div>
-
-        {movements.length === 0 ? (
-          <EmptyState
-            icon="clock"
-            title={dayKind === 'work' ? 'Sin horas todavía' : info.label}
-            text={
-              dayKind === 'work'
-                ? 'Añade un tramo para empezar a registrar el día.'
-                : 'Este día no admite tramos de trabajo.'
-            }
-            action={
-              dayKind === 'work' && activeAccounts.length > 0 ? (
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={() => setForm({})}
-                >
-                  <Icon name="plus" size={16} />
-                  Añadir tramo
-                </button>
-              ) : undefined
-            }
-          />
-        ) : (
-          <div className="list">
-            {movements.map((movement) => {
-              const account = accountMap.get(movement.accountId);
-              return (
-                <div className="movement-row" key={movement.id}>
-                  <button
-                    type="button"
-                    className="movement-button"
-                    onClick={() => setForm({ movement })}
-                    aria-label={`Editar tramo de ${formatTime(
-                      movement.startMin,
-                    )} a ${formatTime(movement.endMin)}`}
-                  >
-                    <span
-                      className="account-dot"
-                      style={{ background: account?.color ?? '#94a3b8' }}
-                    />
-                    <span className="movement-info">
-                      <span className="movement-time">
-                        {formatTime(movement.startMin)} –{' '}
-                        {formatTime(movement.endMin)}
-                        {movement.crossesMidnight ? ' +1d' : ''}
-                      </span>
-                      <span className="movement-account">
-                        {account?.name ?? 'Cuenta eliminada'}
-                      </span>
-                      {movement.note ? (
-                        <span className="movement-note">{movement.note}</span>
-                      ) : null}
-                    </span>
-                    <span className="movement-duration">
-                      {formatDuration(durationMinutes(movement))}
-                    </span>
-                  </button>
-                  <div className="row-actions">
-                    <button
-                      type="button"
-                      className="icon-button plain"
-                      onClick={() => setForm({ movement })}
-                      aria-label="Editar tramo"
-                    >
-                      <Icon name="edit" size={17} />
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-button plain text-danger"
-                      onClick={() => setDeleteMovementTarget(movement)}
-                      aria-label="Eliminar tramo"
-                    >
-                      <Icon name="trash" size={17} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </section>
 
       {activeAccounts.length === 0 ? (
@@ -578,129 +489,423 @@ export function TodayScreen({
         </div>
       ) : null}
 
-      <section className="card card-pad stack-sm">
-        <div className="attachment-section-head">
-          <span className="section-title">Adjuntos</span>
-          <span className="badge">
-            {attachments.length}{' '}
-            {attachments.length === 1 ? 'archivo' : 'archivos'}
+      {processing && processing.date !== date ? (
+        <div className="banner">
+          <span className="spinner" />
+          <span>
+            Procesando «{processing.name}» para {formatLongDate(processing.date)}.
           </span>
         </div>
-
-        {processing ? (
-          <div className="processing-card">
-            <div className="processing-head">
-              <span className="row-center" style={{ minWidth: 0 }}>
-                <span className="spinner" />
-                <span
-                  style={{
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {processing.name}
-                </span>
-              </span>
-              <span>{Math.round(processing.percent * 100)} %</span>
-            </div>
-            <div className="progress">
-              <div
-                className="progress-bar"
-                style={{ width: `${Math.round(processing.percent * 100)}%` }}
-              />
-            </div>
-            <div className="row-between">
-              <span className="tiny muted">
-                {processing.detail ?? processing.stage}
-              </span>
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={() => abortRef.current?.abort()}
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        <div className="attach-grid">
-          {attachments.map((attachment) => (
-            <div className="attach-card" key={attachment.id}>
-              <button
-                type="button"
-                style={{ width: '100%', height: '100%', padding: 0 }}
-                onClick={() => setPreview(attachment)}
-                aria-label={`Abrir ${attachment.name}`}
-              >
-                <AttachmentThumb attachment={attachment} />
-                <span className="attach-overlay">{attachment.name}</span>
-              </button>
-              <button
-                type="button"
-                className="attach-delete"
-                onClick={() => setDeleteAttachmentTarget(attachment)}
-                aria-label={`Eliminar ${attachment.name}`}
-              >
-                <Icon name="trash" size={13} />
-              </button>
-            </div>
-          ))}
-          <button
-            type="button"
-            className="attach-card attach-add"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={Boolean(processing)}
-          >
-            <Icon name="plus" size={23} />
-            <span>Añadir</span>
-          </button>
-        </div>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*,application/pdf"
-          multiple
-          className="hidden"
-          onChange={(event) => void handleFiles(event.target.files)}
-        />
-        <p className="field-hint">
-          Imágenes y PDF. Máximo 25 MB de entrada, 10 MB por archivo y 100 MB en
-          total. Las imágenes se recomprimen y los PDF se optimizan.
-        </p>
-      </section>
-
-      <section className="card card-pad stack-sm">
-        <label className="field-label" htmlFor="day-note">
-          Nota del día
-        </label>
-        <textarea
-          id="day-note"
-          className="textarea"
-          value={noteDraft}
-          maxLength={800}
-          onChange={(event) => setNoteDraft(event.target.value)}
-          onBlur={() => void saveNote()}
-          placeholder="Ej. incidencia, tarea principal, incidencias…"
-        />
-        <span className="field-hint">Se guarda al salir del campo.</span>
-      </section>
-
-      {hasData ? (
-        <button
-          type="button"
-          className="btn btn-ghost btn-block text-danger"
-          onClick={() => {
-            setIncludeAttachments(false);
-            setDeleteDayOpen(true);
-          }}
-        >
-          <Icon name="trash" size={16} />
-          Borrar datos del día
-        </button>
       ) : null}
+
+      <section className="card week-card" aria-label="Días de la semana">
+        {rows.map((row) => {
+          const rowInfo = kindInfo(row.kind);
+          const isSelected = row.date === date;
+          const rowIsToday = row.date === today;
+          return (
+            <div
+              className={`week-day ${isSelected ? 'open' : ''} ${
+                rowIsToday ? 'today' : ''
+              }`}
+              key={row.date}
+            >
+              <button
+                type="button"
+                className="week-day-summary"
+                onClick={() => onDateChange(row.date)}
+                aria-expanded={isSelected}
+                aria-controls={
+                  isSelected ? `week-day-detail-${row.date}` : undefined
+                }
+              >
+                <span className="week-day-main">
+                  <span className="week-day-name">
+                    {formatWeekdayLong(row.date)}
+                  </span>
+                  <span className="week-day-meta">
+                    <span className="week-day-date">
+                      {formatShortDate(row.date)}
+                    </span>
+                    {rowIsToday ? (
+                      <span className="badge primary">Hoy</span>
+                    ) : null}
+                    {row.kind !== 'work' ? (
+                      <span className={`badge ${rowInfo.chipClass}`}>
+                        {rowInfo.label}
+                      </span>
+                    ) : null}
+                    {row.attachmentCount > 0 ? (
+                      <span className="week-day-attach">
+                        <Icon name="paperclip" size={12} />
+                        {row.attachmentCount}
+                      </span>
+                    ) : null}
+                  </span>
+                </span>
+                <span className="week-day-hours">
+                  <strong>
+                    {row.worked > 0 ? formatCompactDuration(row.worked) : '—'}
+                  </strong>
+                  <span>
+                    {row.target > 0
+                      ? `de ${formatCompactDuration(row.target)}`
+                      : 'sin objetivo'}
+                  </span>
+                  {row.excess > 0 ? (
+                    <span
+                      className="week-day-excess"
+                      title="Exceso sobre el objetivo del día"
+                    >
+                      +{formatCompactDuration(row.excess)}
+                    </span>
+                  ) : null}
+                </span>
+                <Icon
+                  name="chevron-right"
+                  size={16}
+                  className="week-day-chevron"
+                />
+              </button>
+
+              {isSelected ? (
+                <div
+                  id={`week-day-detail-${row.date}`}
+                  className="week-day-detail"
+                >
+                  <div className="day-detail-head">
+                    <div>
+                      <div className="card-title">{formatLongDate(date)}</div>
+                      <div className="card-subtitle">
+                        {selectedMovements.length === 0
+                          ? 'Sin registros'
+                          : `${selectedMovements.length} ${
+                              selectedMovements.length === 1
+                                ? 'tramo'
+                                : 'tramos'
+                            } · ${formatDuration(selectedWorked)}`}
+                        {selectedTarget > 0
+                          ? ` · Objetivo ${formatDuration(selectedTarget)}`
+                          : ''}
+                      </div>
+                    </div>
+                    {selectedExcess > 0 ? (
+                      <span className="badge warning">
+                        +{formatDuration(selectedExcess)}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {selectedExcess > 0 ? (
+                    <div className="banner warning">
+                      <Icon name="info" size={16} />
+                      <span>
+                        Has trabajado{' '}
+                        <strong>{formatDuration(selectedExcess)}</strong> por
+                        encima del objetivo de este día. El extra se calcula por
+                        semana.
+                      </span>
+                    </div>
+                  ) : null}
+
+                  {dayKind !== 'work' ? (
+                    <div className="banner warning">
+                      <Icon name="info" size={16} />
+                      <span>
+                        Día marcado como <strong>{info.label.toLowerCase()}</strong>.
+                        Es informativo: no altera los totales y no admite tramos
+                        de trabajo.
+                      </span>
+                    </div>
+                  ) : null}
+
+                  <div className="day-status-block">
+                    <div className="day-status-row">
+                      <span className="day-status-label">Estado del día</span>
+                      <span className={`badge ${info.chipClass}`}>
+                        {info.description}
+                      </span>
+                    </div>
+                    <div className="chip-row">
+                      {DAY_KINDS.map((kind) => (
+                        <button
+                          key={kind.value}
+                          type="button"
+                          className={`chip ${kind.chipClass}`}
+                          aria-pressed={dayKind === kind.value}
+                          onClick={() => void changeKind(kind.value)}
+                        >
+                          {kind.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="day-movements-block">
+                    <div className="day-section-head">
+                      <div>
+                        <div className="card-title">Tramos</div>
+                        <div className="card-subtitle">
+                          {selectedMovements.length === 0
+                            ? 'Sin registros'
+                            : `${selectedMovements.length} ${
+                                selectedMovements.length === 1
+                                  ? 'tramo'
+                                  : 'tramos'
+                              } · ${formatDuration(selectedWorked)}`}
+                        </div>
+                      </div>
+                      {dayKind === 'work' ? (
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={() => setForm({})}
+                          disabled={activeAccounts.length === 0}
+                        >
+                          <Icon name="plus" size={16} />
+                          Añadir
+                        </button>
+                      ) : null}
+                    </div>
+
+                    {selectedMovements.length === 0 ? (
+                      <EmptyState
+                        icon="clock"
+                        title={
+                          dayKind === 'work' ? 'Sin horas todavía' : info.label
+                        }
+                        text={
+                          dayKind === 'work'
+                            ? 'Añade un tramo para empezar a registrar el día.'
+                            : 'Este día no admite tramos de trabajo.'
+                        }
+                      />
+                    ) : (
+                      <div className="list day-movement-list">
+                        {selectedMovements.map((movement) => {
+                          const account = accountMap.get(movement.accountId);
+                          return (
+                            <div className="movement-row" key={movement.id}>
+                              <button
+                                type="button"
+                                className="movement-button"
+                                onClick={() => setForm({ movement })}
+                                aria-label={`Editar tramo de ${formatTime(
+                                  movement.startMin,
+                                )} a ${formatTime(movement.endMin)}`}
+                              >
+                                <span
+                                  className="account-dot"
+                                  style={{
+                                    background: account?.color ?? '#94a3b8',
+                                  }}
+                                />
+                                <span className="movement-info">
+                                  <span className="movement-time">
+                                    {formatTime(movement.startMin)} –{' '}
+                                    {formatTime(movement.endMin)}
+                                    {movement.crossesMidnight ? ' +1d' : ''}
+                                  </span>
+                                  <span className="movement-account">
+                                    {account?.name ?? 'Cuenta eliminada'}
+                                  </span>
+                                  {movement.note ? (
+                                    <span className="movement-note">
+                                      {movement.note}
+                                    </span>
+                                  ) : null}
+                                </span>
+                                <span className="movement-duration">
+                                  {formatDuration(durationMinutes(movement))}
+                                </span>
+                              </button>
+                              <div className="row-actions">
+                                <button
+                                  type="button"
+                                  className="icon-button plain"
+                                  onClick={() => setForm({ movement })}
+                                  aria-label="Editar tramo"
+                                >
+                                  <Icon name="edit" size={17} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="icon-button plain text-danger"
+                                  onClick={() =>
+                                    setDeleteMovementTarget(movement)
+                                  }
+                                  aria-label="Eliminar tramo"
+                                >
+                                  <Icon name="trash" size={17} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="day-attachments-block">
+                    <div className="attachment-section-head">
+                      <div>
+                        <span className="section-title">Adjuntos</span>
+                        <div className="card-subtitle">
+                          {attachments.length === 0
+                            ? 'Opcional'
+                            : `${attachments.length} ${
+                                attachments.length === 1
+                                  ? 'archivo'
+                                  : 'archivos'
+                              }`}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={Boolean(processing)}
+                      >
+                        <Icon name="paperclip" size={15} />
+                        Adjuntar
+                      </button>
+                    </div>
+
+                    {processing && processing.date === date ? (
+                      <div className="processing-card">
+                        <div className="processing-head">
+                          <span
+                            className="row-center"
+                            style={{ minWidth: 0 }}
+                          >
+                            <span className="spinner" />
+                            <span
+                              style={{
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {processing.name}
+                            </span>
+                          </span>
+                          <span>{Math.round(processing.percent * 100)} %</span>
+                        </div>
+                        <div className="progress">
+                          <div
+                            className="progress-bar"
+                            style={{
+                              width: `${Math.round(processing.percent * 100)}%`,
+                            }}
+                          />
+                        </div>
+                        <div className="row-between">
+                          <span className="tiny muted">
+                            {processing.detail ?? processing.stage}
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => abortRef.current?.abort()}
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {attachments.length > 0 ? (
+                      <div className="attach-grid">
+                        {attachments.map((attachment) => (
+                          <div className="attach-card" key={attachment.id}>
+                            <button
+                              type="button"
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                padding: 0,
+                              }}
+                              onClick={() => setPreview(attachment)}
+                              aria-label={`Abrir ${attachment.name}`}
+                            >
+                              <AttachmentThumb attachment={attachment} />
+                              <span className="attach-overlay">
+                                {attachment.name}
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              className="attach-delete"
+                              onClick={() =>
+                                setDeleteAttachmentTarget(attachment)
+                              }
+                              aria-label={`Eliminar ${attachment.name}`}
+                            >
+                              <Icon name="trash" size={13} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="field-hint">
+                        Puedes adjuntar imágenes o PDF como justificante del día.
+                      </p>
+                    )}
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*,application/pdf"
+                      multiple
+                      className="hidden"
+                      onChange={(event) =>
+                        void handleFiles(event.target.files)
+                      }
+                    />
+                    <p className="field-hint">
+                      Imágenes y PDF. Máximo 25 MB de entrada, 10 MB por archivo
+                      y 100 MB en total. Las imágenes se recomprimen y los PDF
+                      se optimizan.
+                    </p>
+                  </div>
+
+                  <div className="day-note-block">
+                    <label className="field-label" htmlFor="day-note">
+                      Nota del día
+                    </label>
+                    <textarea
+                      id="day-note"
+                      className="textarea"
+                      value={noteDraft}
+                      maxLength={800}
+                      onChange={(event) => setNoteDraft(event.target.value)}
+                      onBlur={() => void saveNote()}
+                      placeholder="Ej. incidencia, tarea principal, incidencias…"
+                    />
+                    <span className="field-hint">
+                      Se guarda al salir del campo.
+                    </span>
+                  </div>
+
+                  {hasData ? (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-block text-danger"
+                      onClick={() => {
+                        setIncludeAttachments(false);
+                        setDeleteDayOpen(true);
+                      }}
+                    >
+                      <Icon name="trash" size={16} />
+                      Borrar datos del día
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </section>
 
       {form ? (
         <MovementFormModal

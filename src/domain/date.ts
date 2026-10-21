@@ -114,6 +114,10 @@ const shortDateFormatter = new Intl.DateTimeFormat('es-ES', {
 
 const weekdayFormatter = new Intl.DateTimeFormat('es-ES', { weekday: 'short' });
 
+const weekdayLongFormatter = new Intl.DateTimeFormat('es-ES', {
+  weekday: 'long',
+});
+
 const monthFormatter = new Intl.DateTimeFormat('es-ES', {
   month: 'long',
   year: 'numeric',
@@ -133,6 +137,10 @@ export function formatShortDate(value: ISODate): string {
 
 export function formatWeekday(value: ISODate): string {
   return capitalize(weekdayFormatter.format(parseISO(value)).replace('.', ''));
+}
+
+export function formatWeekdayLong(value: ISODate): string {
+  return capitalize(weekdayLongFormatter.format(parseISO(value)));
 }
 
 export function formatMonthYear(value: ISODate): string {
