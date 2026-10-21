@@ -6,8 +6,8 @@ No tiene backend, no sincroniza datos y no envía información a ningún servido
 
 ## Características
 
-- Vista semanal en **Inicio**, con los siete días y el día seleccionado desplegable.
-- Registro de tramos de trabajo por día, con hora de inicio, fin, descanso y cuenta.
+- Vista semanal compacta en **Inicio**, con los siete días y una hoja por día para editar el estado, los tramos, los adjuntos y la nota.
+- Registro de tramos de trabajo por día, con hora de inicio, fin, descanso y cuenta. Los cambios del día se confirman juntos con **Guardar día**.
 - Varias cuentas con color, archivo y totales por cuenta.
 - Objetivo semanal global, con horas distintas para cada día de la semana.
 - Excepciones de objetivo para fechas concretas.
@@ -138,7 +138,7 @@ Formato de seguridad de las copias:
 - Los PDF con texto suficiente se optimizan sin pérdida cuando el resultado es más pequeño; los PDF sin texto se rasterizan si así se reduce el tamaño.
 - Un PDF protegido con contraseña o dañado se rechaza.
 
-Los adjuntos pertenecen al día, no a un tramo concreto. Se añaden desde el detalle del día seleccionado en **Inicio** y se pueden previsualizar, descargar, compartir y eliminar allí mismo.
+Los adjuntos pertenecen al día, no a un tramo concreto. Se añaden desde la hoja del día en **Inicio** y se pueden previsualizar, descargar, compartir y eliminar allí mismo. Las altas y bajas de adjuntos quedan pendientes hasta pulsar **Guardar día**; si se cancela la hoja, se descartan. Si recargas o cierras la app antes de guardar, los adjuntos pendientes se pierden.
 
 ## Cálculos
 

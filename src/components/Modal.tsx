@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './Icon';
 
@@ -11,6 +11,8 @@ interface ModalProps {
   dismissible?: boolean;
 }
 
+const modalStack: symbol[] = [];
+
 export function Modal({
   title,
   subtitle,
@@ -19,16 +21,29 @@ export function Modal({
   footer,
   dismissible = true,
 }: ModalProps) {
+  const modalId = useRef<symbol>(Symbol('modal'));
+
+  useEffect(() => {
+    const id = modalId.current;
+    modalStack.push(id);
+    document.body.classList.add('modal-open');
+    return () => {
+      const index = modalStack.lastIndexOf(id);
+      if (index >= 0) modalStack.splice(index, 1);
+      if (modalStack.length === 0) {
+        document.body.classList.remove('modal-open');
+      }
+    };
+  }, []);
+
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && dismissible) onClose();
+      if (event.key !== 'Escape' || !dismissible) return;
+      if (modalStack[modalStack.length - 1] !== modalId.current) return;
+      onClose();
     };
-    document.body.classList.add('modal-open');
     window.addEventListener('keydown', handleKey);
-    return () => {
-      document.body.classList.remove('modal-open');
-      window.removeEventListener('keydown', handleKey);
-    };
+    return () => window.removeEventListener('keydown', handleKey);
   }, [dismissible, onClose]);
 
   return createPortal(

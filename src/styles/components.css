@@ -746,20 +746,6 @@
   backdrop-filter: blur(4px);
 }
 
-.attach-add {
-  flex-direction: column;
-  gap: 4px;
-  border: 1.5px dashed var(--border-strong);
-  background: transparent;
-  color: var(--text-3);
-  font-size: 0.72rem;
-  font-weight: 650;
-}
-
-.attach-add:disabled {
-  opacity: 0.5;
-}
-
 .attach-preview {
   width: 100%;
   max-height: 62dvh;

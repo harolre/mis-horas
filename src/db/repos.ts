@@ -10,6 +10,7 @@ import type {
 } from '../types';
 import { isValidISODate } from '../domain/date';
 import { durationMinutes, movementsOverlap } from '../domain/time';
+import { MAX_TOTAL_ATTACHMENT_BYTES } from '../attachments/constants';
 import { db } from './db';
 import {
   ACCOUNT_COLORS,
@@ -484,6 +485,182 @@ export async function deleteAttachment(id: string): Promise<void> {
           attachmentCount: Math.max(0, (day.attachmentCount ?? 1) - 1),
           updatedAt: Date.now(),
         });
+      }
+    },
+  );
+}
+
+export interface DayMovementDraft {
+  id?: string;
+  accountId: string;
+  startMin: number;
+  endMin: number;
+  breakMin: number;
+  crossesMidnight: boolean;
+  note?: string;
+}
+
+export interface DayAttachmentDraft {
+  name: string;
+  mime: string;
+  size: number;
+  thumb: Blob | null;
+  blob: Blob;
+}
+
+export interface SaveDayDraftInput {
+  date: ISODate;
+  kind: DayKind;
+  note?: string;
+  movements: DayMovementDraft[];
+  removedMovementIds: string[];
+  attachmentAdds: DayAttachmentDraft[];
+  attachmentDeletes: string[];
+}
+
+/**
+ * Guarda de forma atómica todos los cambios de un día: estado, nota, tramos y
+ * adjuntos pendientes. Si algo falla, no se aplica ningún cambio.
+ */
+export async function saveDayDraft(input: SaveDayDraftInput): Promise<void> {
+  if (!isValidISODate(input.date)) {
+    throw new ValidationError('La fecha no es válida.');
+  }
+  const note = input.note?.trim() || undefined;
+  if (note && note.length > 800) {
+    throw new ValidationError('La nota del día no puede superar los 800 caracteres.');
+  }
+  if (input.kind !== 'work' && input.movements.length > 0) {
+    throw new ValidationError(
+      'Borra los tramos antes de marcar el día como ausencia.',
+    );
+  }
+  for (const movement of input.movements) {
+    validateMovementInput({
+      accountId: movement.accountId,
+      date: input.date,
+      startMin: movement.startMin,
+      endMin: movement.endMin,
+      breakMin: movement.breakMin,
+      crossesMidnight: movement.crossesMidnight,
+      note: movement.note,
+    });
+  }
+  for (const attachment of input.attachmentAdds) {
+    if (attachment.size <= 0 || !attachment.blob.size) {
+      throw new ValidationError(`El archivo «${attachment.name}» está vacío.`);
+    }
+  }
+
+  await db.transaction(
+    'rw',
+    db.accounts,
+    db.movements,
+    db.days,
+    db.attachments,
+    db.attachmentFiles,
+    async () => {
+      const now = Date.now();
+      const removed = new Set(input.removedMovementIds);
+
+      for (const id of removed) {
+        const current = await db.movements.get(id);
+        if (current && current.date !== input.date) {
+          throw new ValidationError('El tramo no pertenece a este día.');
+        }
+        if (current) await db.movements.delete(id);
+      }
+
+      if (input.kind !== 'work') {
+        await db.movements.where('date').equals(input.date).delete();
+      }
+
+      for (const movement of input.movements) {
+        const values = {
+          accountId: movement.accountId,
+          date: input.date,
+          startMin: movement.startMin,
+          endMin: movement.endMin,
+          breakMin: movement.breakMin,
+          crossesMidnight: movement.crossesMidnight ? (1 as const) : (0 as const),
+          note: movement.note?.trim() || undefined,
+          updatedAt: now,
+        };
+        if (movement.id) {
+          const current = await db.movements.get(movement.id);
+          if (!current || current.date !== input.date) {
+            throw new ValidationError('El tramo que intentas editar ya no existe.');
+          }
+          if (current.accountId !== movement.accountId) {
+            await assertAccountUsable(movement.accountId);
+          }
+          await db.movements.update(movement.id, values);
+        } else {
+          await assertAccountUsable(movement.accountId);
+          await db.movements.add({
+            id: uuid(),
+            ...values,
+            createdAt: now,
+          });
+        }
+      }
+
+      for (const id of input.attachmentDeletes) {
+        const attachment = await db.attachments.get(id);
+        if (!attachment) continue;
+        if (attachment.date !== input.date) {
+          throw new ValidationError('El adjunto no pertenece a este día.');
+        }
+        await db.attachments.delete(id);
+        await db.attachmentFiles.delete(id);
+      }
+
+      for (const attachment of input.attachmentAdds) {
+        const id = uuid();
+        await db.attachments.add({
+          id,
+          date: input.date,
+          name: attachment.name,
+          mime: attachment.mime,
+          size: attachment.size,
+          thumb: attachment.thumb,
+          createdAt: now,
+        });
+        await db.attachmentFiles.add({ id, blob: attachment.blob });
+      }
+
+      const allAttachments = await db.attachments.toArray();
+      const totalSize = allAttachments.reduce(
+        (total, attachment) => total + attachment.size,
+        0,
+      );
+      if (totalSize > MAX_TOTAL_ATTACHMENT_BYTES) {
+        throw new ValidationError(
+          'Se alcanzaría el límite de 100 MB de adjuntos. Borra algún archivo antes de guardar.',
+        );
+      }
+
+      const [movementCount, attachmentCount] = await Promise.all([
+        db.movements.where('date').equals(input.date).count(),
+        db.attachments.where('date').equals(input.date).count(),
+      ]);
+
+      if (
+        movementCount === 0 &&
+        attachmentCount === 0 &&
+        !note &&
+        input.kind === 'work'
+      ) {
+        await db.days.delete(input.date);
+      } else {
+        const day: DayEntry = {
+          date: input.date,
+          kind: input.kind,
+          note,
+          attachmentCount,
+          updatedAt: now,
+        };
+        await db.days.put(day);
       }
     },
   );

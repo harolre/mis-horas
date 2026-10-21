@@ -1,22 +1,21 @@
-import { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import type { Account, Movement } from '../../types';
+import { useEffect, useRef, useState } from 'react';
+import type { Account } from '../../types';
 import {
-  addMovement,
-  findOverlaps,
-  listMovementsByDate,
-  updateMovement,
-} from '../../db/repos';
-import { formatTime, parseTime, formatDuration } from '../../domain/time';
-import { Modal } from '../../components/Modal';
+  formatDuration,
+  formatTime,
+  movementsOverlap,
+  parseTime,
+} from '../../domain/time';
 import { Icon } from '../../components/Icon';
+import type { DraftMovement } from './dayDraft';
 
-interface MovementFormModalProps {
-  date: string;
+interface MovementDraftFormProps {
   accounts: Account[];
-  movement?: Movement;
-  onClose: () => void;
-  onSaved: (message: string) => void;
+  movements: DraftMovement[];
+  editing?: DraftMovement | null;
+  onSubmit: (movement: DraftMovement) => void;
+  onCancel: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 function lastAccountId(): string {
@@ -27,42 +26,46 @@ function lastAccountId(): string {
   }
 }
 
-export function MovementFormModal({
-  date,
+export function MovementDraftForm({
   accounts,
-  movement,
-  onClose,
-  onSaved,
-}: MovementFormModalProps) {
-  const dayMovements = useLiveQuery(
-    () => listMovementsByDate(date),
-    [date],
-    [],
-  );
+  movements,
+  editing,
+  onSubmit,
+  onCancel,
+  onDirtyChange,
+}: MovementDraftFormProps) {
+  const formRef = useRef<HTMLDivElement | null>(null);
   const usableAccounts = accounts.filter(
-    (account) => !account.archived || account.id === movement?.accountId,
+    (account) => !account.archived || account.id === editing?.accountId,
   );
   const remembered = lastAccountId();
   const initialAccount =
-    movement?.accountId ??
+    editing?.accountId ??
     (usableAccounts.some((account) => account.id === remembered)
       ? remembered
       : usableAccounts[0]?.id ?? '');
+  const initialStart = editing ? formatTime(editing.startMin) : '09:00';
+  const initialEnd = editing ? formatTime(editing.endMin) : '17:00';
+  const initialBreak = String(editing?.breakMin ?? 0);
+  const initialCrossesMidnight = editing?.crossesMidnight ?? false;
+  const initialNote = editing?.note ?? '';
 
   const [accountId, setAccountId] = useState(initialAccount);
-  const [start, setStart] = useState(
-    movement ? formatTime(movement.startMin) : '09:00',
-  );
-  const [end, setEnd] = useState(
-    movement ? formatTime(movement.endMin) : '17:00',
-  );
-  const [breakMin, setBreakMin] = useState(String(movement?.breakMin ?? 0));
+  const [start, setStart] = useState(initialStart);
+  const [end, setEnd] = useState(initialEnd);
+  const [breakMin, setBreakMin] = useState(initialBreak);
   const [crossesMidnight, setCrossesMidnight] = useState(
-    movement?.crossesMidnight === 1,
+    initialCrossesMidnight,
   );
-  const [note, setNote] = useState(movement?.note ?? '');
+  const [note, setNote] = useState(initialNote);
   const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
+  const formDirty =
+    accountId !== initialAccount ||
+    start !== initialStart ||
+    end !== initialEnd ||
+    breakMin !== initialBreak ||
+    crossesMidnight !== initialCrossesMidnight ||
+    note !== initialNote;
 
   const startMin = parseTime(start);
   const endMin = parseTime(end);
@@ -74,21 +77,35 @@ export function MovementFormModal({
   const duration = gross - (Number.isFinite(breakValue) ? breakValue : 0);
   const overlaps =
     startMin !== null && endMin !== null && gross > 0
-      ? findOverlaps(
-          {
-            accountId,
-            date,
-            startMin,
-            endMin,
-            breakMin: Number.isFinite(breakValue) ? breakValue : 0,
-            crossesMidnight,
-          },
-          dayMovements,
-          movement?.id,
+      ? movements.filter(
+          (movement) =>
+            movement.key !== editing?.key &&
+            movementsOverlap(
+              {
+                startMin: movement.startMin,
+                endMin: movement.endMin,
+                breakMin: movement.breakMin,
+                crossesMidnight: movement.crossesMidnight ? 1 : 0,
+              },
+              {
+                startMin,
+                endMin,
+                breakMin: Number.isFinite(breakValue) ? breakValue : 0,
+                crossesMidnight: crossesMidnight ? 1 : 0,
+              },
+            ),
         )
       : [];
 
-  async function handleSubmit() {
+  useEffect(() => {
+    formRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, []);
+
+  useEffect(() => {
+    onDirtyChange?.(formDirty);
+  }, [formDirty, onDirtyChange]);
+
+  function handleSubmit() {
     setError('');
     if (!accountId) {
       setError('Crea una cuenta antes de registrar horas.');
@@ -112,71 +129,40 @@ export function MovementFormModal({
       setError('La pausa no puede ser igual o mayor que el tramo.');
       return;
     }
-    setSaving(true);
+
     try {
-      const input = {
-        accountId,
-        date,
-        startMin,
-        endMin,
-        breakMin: breakValue,
-        crossesMidnight,
-        note,
-      };
-      if (movement) {
-        await updateMovement(movement.id, input);
-        onSaved('Tramo actualizado.');
-      } else {
-        await addMovement(input);
-        onSaved('Tramo añadido.');
-      }
-      try {
-        localStorage.setItem('mis-horas-last-account', accountId);
-      } catch {
-        // sin almacenamiento auxiliar
-      }
-      onClose();
-    } catch (submitError) {
-      setError((submitError as Error).message || 'No se pudo guardar el tramo.');
-    } finally {
-      setSaving(false);
+      localStorage.setItem('mis-horas-last-account', accountId);
+    } catch {
+      // sin almacenamiento auxiliar
     }
+
+    onSubmit({
+      key: editing?.key ?? `draft-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      id: editing?.id,
+      accountId,
+      startMin,
+      endMin,
+      breakMin: breakValue,
+      crossesMidnight,
+      note: note.trim() || undefined,
+    });
   }
 
   return (
-    <Modal
-      title={movement ? 'Editar tramo' : 'Nuevo tramo'}
-      subtitle={date}
-      onClose={onClose}
-      dismissible={!saving}
-      footer={
-        <>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={onClose}
-            disabled={saving}
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => void handleSubmit()}
-            disabled={saving}
-          >
-            {saving ? <span className="spinner on-primary" /> : <Icon name="save" size={17} />}
-            Guardar
-          </button>
-        </>
-      }
-    >
+    <div className="movement-draft-form" ref={formRef}>
+      <div className="movement-draft-head">
+        <div className="card-title">
+          {editing ? 'Editar tramo' : 'Nuevo tramo'}
+        </div>
+        <span className="badge">Borrador</span>
+      </div>
+
       <div className="field">
-        <label className="field-label" htmlFor="movement-account">
+        <label className="field-label" htmlFor="draft-movement-account">
           Cuenta
         </label>
         <select
-          id="movement-account"
+          id="draft-movement-account"
           className="select"
           value={accountId}
           onChange={(event) => setAccountId(event.target.value)}
@@ -195,11 +181,11 @@ export function MovementFormModal({
 
       <div className="form-grid">
         <div className="field">
-          <label className="field-label" htmlFor="movement-start">
+          <label className="field-label" htmlFor="draft-movement-start">
             Inicio
           </label>
           <input
-            id="movement-start"
+            id="draft-movement-start"
             className="input"
             type="time"
             value={start}
@@ -207,11 +193,11 @@ export function MovementFormModal({
           />
         </div>
         <div className="field">
-          <label className="field-label" htmlFor="movement-end">
+          <label className="field-label" htmlFor="draft-movement-end">
             Fin
           </label>
           <input
-            id="movement-end"
+            id="draft-movement-end"
             className="input"
             type="time"
             value={end}
@@ -219,11 +205,11 @@ export function MovementFormModal({
           />
         </div>
         <div className="field">
-          <label className="field-label" htmlFor="movement-break">
+          <label className="field-label" htmlFor="draft-movement-break">
             Pausa (min)
           </label>
           <input
-            id="movement-break"
+            id="draft-movement-break"
             className="input"
             type="number"
             inputMode="numeric"
@@ -236,10 +222,7 @@ export function MovementFormModal({
         </div>
         <div className="field">
           <span className="field-label">Duración</span>
-          <div
-            className="input"
-            style={{ display: 'flex', alignItems: 'center', background: 'var(--surface-2)' }}
-          >
+          <div className="input movement-duration-preview">
             {duration > 0 ? formatDuration(duration) : '—'}
           </div>
         </div>
@@ -272,11 +255,11 @@ export function MovementFormModal({
       ) : null}
 
       <div className="field">
-        <label className="field-label" htmlFor="movement-note">
+        <label className="field-label" htmlFor="draft-movement-note">
           Nota (opcional)
         </label>
         <textarea
-          id="movement-note"
+          id="draft-movement-note"
           className="textarea"
           maxLength={500}
           value={note}
@@ -284,6 +267,28 @@ export function MovementFormModal({
           placeholder="Ej. jornada partida, incidencia…"
         />
       </div>
-    </Modal>
+
+      <div className="movement-draft-actions">
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={onCancel}
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={handleSubmit}
+          disabled={usableAccounts.length === 0}
+        >
+          <Icon name={editing ? 'check' : 'plus'} size={16} />
+          {editing ? 'Actualizar tramo' : 'Añadir tramo'}
+        </button>
+      </div>
+      <p className="field-hint">
+        El tramo se guardará en el día al pulsar «Guardar día».
+      </p>
+    </div>
   );
 }
