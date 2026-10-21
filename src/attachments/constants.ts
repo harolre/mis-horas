@@ -1,0 +1,11 @@
+export const MAX_INPUT_BYTES = 25 * 1024 * 1024;
+export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+export const MAX_TOTAL_ATTACHMENT_BYTES = 100 * 1024 * 1024;
+export const MAX_PDF_PAGES = 100;
+export const IMAGE_MAX_DIMENSION = 2048;
+export const IMAGE_THUMB_DIMENSION = 320;
+export const IMAGE_QUALITY = 0.82;
+export const IMAGE_THUMB_QUALITY = 0.72;
+export const PDF_RASTER_DPI = 150;
+export const PDF_JPEG_QUALITY = 0.7;
+export const PDF_THUMB_DIMENSION = 320;
