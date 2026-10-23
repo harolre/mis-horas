@@ -440,10 +440,12 @@
 .day-hours-track {
   display: flex;
   gap: 1px;
+  overflow: visible;
 }
 
 .day-hours-segment {
   display: block;
+  flex: 0 0 auto;
   height: 100%;
   transition: width 0.35s ease;
 }
@@ -454,6 +456,41 @@
 
 .day-hours-segment.excess {
   background: var(--warning);
+}
+
+.day-hours-segment.vacation,
+.day-hours-swatch.vacation,
+.hours-stack-segment.vacation {
+  background: var(--vacation);
+}
+
+.day-hours-segment.holiday,
+.day-hours-swatch.holiday,
+.hours-stack-segment.holiday {
+  background: var(--holiday);
+}
+
+.day-hours-segment.sick,
+.day-hours-swatch.sick,
+.hours-stack-segment.sick {
+  background: var(--sick);
+}
+
+.hours-stack {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.hours-stack-segment {
+  display: block;
+  height: 100%;
+  transition: width 0.35s ease;
+}
+
+.hours-stack-segment.worked {
+  background: var(--primary);
 }
 
 .day-hours-legend {

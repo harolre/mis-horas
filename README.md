@@ -16,7 +16,7 @@ No tiene backend, no sincroniza datos y no envía información a ningún servido
 - Exceso diario informativo cuando un día supera su objetivo, sin alterar el cálculo semanal del extra.
 - Resumen semanal, mensual y anual, con desglose por cuenta.
 - Calendario mensual con indicadores de horas, ausencias y adjuntos.
-- Estados de día informativos: trabajo, vacaciones, festivo y baja. Un día marcado como ausencia no admite tramos y no altera los totales.
+- Estados de día: trabajo, vacaciones, festivo y baja. Vacaciones, festivos y bajas reducen el objetivo diario y se distinguen por color en los resúmenes; no se suman como horas trabajadas.
 - Notas por día.
 - Adjuntos de imágenes y PDF, con miniaturas y límites de tamaño.
 - Compresión de imágenes y optimización de PDF (sin pérdida cuando es posible, con rasterización como alternativa).
@@ -145,11 +145,11 @@ Los adjuntos pertenecen al día, no a un tramo concreto. Se añaden desde la hoj
 
 - Los tramos se guardan en minutos y pueden cruzar la medianoche.
 - El objetivo diario se toma de las horas configuradas para ese día de la semana o de una excepción de fecha.
-- El objetivo semanal es la suma de los objetivos de los días de la semana.
+- El objetivo semanal y mensual suma los objetivos diarios ajustados: los días marcados como vacaciones, festivo o baja no tienen objetivo que cumplir.
 - Las horas extra de una semana son las horas trabajadas que superan el objetivo semanal, nunca negativas.
 - El exceso de un día sobre su objetivo se muestra como información en **Inicio**, pero no se suma como extra si la semana no supera su objetivo global.
-- En los resúmenes mensual y anual, las horas extra se suman por semanas cuyo primer día cae dentro del periodo.
-- Las ausencias son informativas: no restan horas ni cambian el objetivo.
+- Los periodos mensual y anual usan sus fechas naturales completas. En los resúmenes, las semanas que cruzan el límite del periodo solo cuentan los días incluidos en ese periodo.
+- Las horas justificadas de vacaciones, festivos y bajas se representan por separado mediante colores, pero no se cuentan como trabajadas ni como extras.
 
 ## Estructura del proyecto
 

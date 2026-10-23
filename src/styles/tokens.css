@@ -29,8 +29,8 @@
   --vacation-soft: #e5f5ff;
   --holiday: #7c3aed;
   --holiday-soft: #f1ebff;
-  --sick: #d97706;
-  --sick-soft: #fff4e5;
+  --sick: #dc2626;
+  --sick-soft: #feecec;
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04);
   --shadow-md: 0 10px 30px rgba(16, 24, 40, 0.08);
   --shadow-lg: 0 24px 60px rgba(16, 24, 40, 0.16);
@@ -71,8 +71,8 @@
   --vacation-soft: #0b2a3b;
   --holiday: #a78bfa;
   --holiday-soft: #251b45;
-  --sick: #fbbf24;
-  --sick-soft: #33260b;
+  --sick: #f87171;
+  --sick-soft: #351417;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55);
@@ -108,8 +108,8 @@
     --vacation-soft: #0b2a3b;
     --holiday: #a78bfa;
     --holiday-soft: #251b45;
-    --sick: #fbbf24;
-    --sick-soft: #33260b;
+    --sick: #f87171;
+    --sick-soft: #351417;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.35);
     --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55);

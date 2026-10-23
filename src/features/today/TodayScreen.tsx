@@ -64,11 +64,13 @@ export function TodayScreen({
   const dayEntries = new Map((days ?? []).map((entry) => [entry.date, entry]));
   const baseRows =
     settings && movements && days
-      ? daysOfWeek(weekStart, movements, settings)
+      ? daysOfWeek(weekStart, movements, settings, days)
       : Array.from({ length: 7 }, (_, index) => ({
           date: addDays(weekStart, index),
           worked: 0,
           target: 0,
+          kind: 'work' as const,
+          excused: 0,
         }));
   const rows: WeekDayRow[] = baseRows.map((row) => {
     const entry = dayEntries.get(row.date);
@@ -81,7 +83,9 @@ export function TodayScreen({
   });
 
   const week =
-    settings && movements ? weekTotals(weekStart, movements, settings) : null;
+    settings && movements
+      ? weekTotals(weekStart, movements, settings, days ?? [])
+      : null;
   const daysWithHours = rows.filter((row) => row.worked > 0).length;
   const activeAccounts = (accounts ?? []).filter((account) => !account.archived);
   const today = todayISO();

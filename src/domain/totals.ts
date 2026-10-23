@@ -1,4 +1,4 @@
-import type { ISODate, Movement, Settings } from '../types';
+import type { DayEntry, DayKind, ISODate, Movement, Settings } from '../types';
 import {
   addDays,
   endOfMonth,
@@ -24,25 +24,70 @@ export interface PeriodTotals extends Totals {
 export interface WeekSummary extends Totals {
   start: ISODate;
   end: ISODate;
+  excused: Record<Exclude<DayKind, 'work'>, number>;
 }
 
 export interface MonthSummary {
   month: ISODate;
   worked: number;
   target: number;
+  excused: Record<Exclude<DayKind, 'work'>, number>;
 }
 
-export function targetForDate(date: ISODate, settings: Settings): number {
+export type ExcusedHours = Record<Exclude<DayKind, 'work'>, number>;
+export type ExtraCalculation = 'weekly' | 'period';
+
+function emptyExcusedHours(): ExcusedHours {
+  return { vacation: 0, holiday: 0, sick: 0 };
+}
+
+function dayForDate(date: ISODate, days: readonly DayEntry[]): DayEntry | undefined {
+  return days.find((day) => day.date === date);
+}
+
+export function scheduledTargetForDate(date: ISODate, settings: Settings): number {
   const override = settings.dateOverrides[date];
   if (typeof override === 'number') return override;
   return settings.dailyTargets[weekday(date) - 1] ?? 0;
 }
 
-export function sumTarget(from: ISODate, to: ISODate, settings: Settings): number {
+export function targetForDate(
+  date: ISODate,
+  settings: Settings,
+  days: readonly DayEntry[] = [],
+): number {
+  const day = dayForDate(date, days);
+  return day && day.kind !== 'work' ? 0 : scheduledTargetForDate(date, settings);
+}
+
+function excusedHoursForRange(
+  from: ISODate,
+  to: ISODate,
+  settings: Settings,
+  days: readonly DayEntry[],
+): ExcusedHours {
+  const result = emptyExcusedHours();
+  let cursor = from;
+  while (cursor <= to) {
+    const day = dayForDate(cursor, days);
+    if (day && day.kind !== 'work') {
+      result[day.kind] += scheduledTargetForDate(cursor, settings);
+    }
+    cursor = addDays(cursor, 1);
+  }
+  return result;
+}
+
+export function sumTarget(
+  from: ISODate,
+  to: ISODate,
+  settings: Settings,
+  days: readonly DayEntry[] = [],
+): number {
   let total = 0;
   let cursor = from;
   while (cursor <= to) {
-    total += targetForDate(cursor, settings);
+    total += targetForDate(cursor, settings, days);
     cursor = addDays(cursor, 1);
   }
   return total;
@@ -64,11 +109,12 @@ export function weekTotals(
   date: ISODate,
   movements: Movement[],
   settings: Settings,
+  days: readonly DayEntry[] = [],
 ): WeekSummary {
   const start = weekStartFor(date, settings);
   const end = addDays(start, 6);
   const worked = sumWorked(movements.filter((m) => inRange(m, start, end)));
-  const target = sumTarget(start, end, settings);
+  const target = sumTarget(start, end, settings, days);
   return {
     start,
     end,
@@ -76,6 +122,7 @@ export function weekTotals(
     target,
     diff: worked - target,
     extra: Math.max(0, worked - target),
+    excused: excusedHoursForRange(start, end, settings, days),
   };
 }
 
@@ -85,10 +132,12 @@ export function periodTotals(
   movements: Movement[],
   settings: Settings,
   includeExtra = true,
+  days: readonly DayEntry[] = [],
+  extraCalculation: ExtraCalculation = 'weekly',
 ): PeriodTotals {
   const inPeriod = movements.filter((m) => inRange(m, from, to));
   const worked = sumWorked(inPeriod);
-  const target = sumTarget(from, to, settings);
+  const target = sumTarget(from, to, settings, days);
   const perAccount: Record<string, number> = {};
   for (const movement of inPeriod) {
     perAccount[movement.accountId] =
@@ -97,17 +146,21 @@ export function periodTotals(
 
   let extra = 0;
   if (includeExtra) {
-    let week = startOfWeek(from, settings.weekStart);
-    while (week <= to) {
-      if (week >= from) {
-        const end = addDays(week, 6);
-        const weekWorked = sumWorked(
-          movements.filter((m) => inRange(m, week, end)),
+    if (extraCalculation === 'period') {
+      extra = Math.max(0, worked - target);
+    } else {
+      let week = startOfWeek(from, settings.weekStart);
+      while (week <= to) {
+        const sliceFrom = week < from ? from : week;
+        const weekEnd = addDays(week, 6);
+        const sliceTo = weekEnd > to ? to : weekEnd;
+        const sliceWorked = sumWorked(
+          movements.filter((m) => inRange(m, sliceFrom, sliceTo)),
         );
-        const weekTarget = sumTarget(week, end, settings);
-        extra += Math.max(0, weekWorked - weekTarget);
+        const sliceTarget = sumTarget(sliceFrom, sliceTo, settings, days);
+        extra += Math.max(0, sliceWorked - sliceTarget);
+        week = addDays(week, 7);
       }
-      week = addDays(week, 7);
     }
   }
 
@@ -125,13 +178,27 @@ export function weeklyBreakdown(
   to: ISODate,
   movements: Movement[],
   settings: Settings,
+  days: readonly DayEntry[] = [],
 ): WeekSummary[] {
   const weeks: WeekSummary[] = [];
   let cursor = startOfWeek(from, settings.weekStart);
   while (cursor <= to) {
-    if (cursor >= from) {
-      weeks.push(weekTotals(cursor, movements, settings));
-    }
+    const sliceFrom = cursor < from ? from : cursor;
+    const weekEnd = addDays(cursor, 6);
+    const sliceTo = weekEnd > to ? to : weekEnd;
+    const worked = sumWorked(
+      movements.filter((movement) => inRange(movement, sliceFrom, sliceTo)),
+    );
+    const target = sumTarget(sliceFrom, sliceTo, settings, days);
+    weeks.push({
+      start: sliceFrom,
+      end: sliceTo,
+      worked,
+      target,
+      diff: worked - target,
+      extra: Math.max(0, worked - target),
+      excused: excusedHoursForRange(sliceFrom, sliceTo, settings, days),
+    });
     cursor = addDays(cursor, 7);
   }
   return weeks;
@@ -141,14 +208,27 @@ export function daysOfWeek(
   start: ISODate,
   movements: Movement[],
   settings: Settings,
-): Array<{ date: ISODate; worked: number; target: number }> {
+  days: readonly DayEntry[] = [],
+): Array<{
+  date: ISODate;
+  worked: number;
+  target: number;
+  kind: DayKind;
+  excused: number;
+}> {
   const result = [];
   for (let index = 0; index < 7; index += 1) {
     const date = addDays(start, index);
+    const entry = dayForDate(date, days);
     result.push({
       date,
       worked: sumWorked(movements.filter((m) => m.date === date)),
-      target: targetForDate(date, settings),
+      target: targetForDate(date, settings, days),
+      kind: entry?.kind ?? 'work',
+      excused:
+        entry && entry.kind !== 'work'
+          ? scheduledTargetForDate(date, settings)
+          : 0,
     });
   }
   return result;
@@ -158,6 +238,7 @@ export function monthlyBreakdown(
   year: ISODate,
   movements: Movement[],
   settings: Settings,
+  days: readonly DayEntry[] = [],
 ): MonthSummary[] {
   const months: MonthSummary[] = [];
   const yearStart = startOfYear(year);
@@ -168,7 +249,8 @@ export function monthlyBreakdown(
     months.push({
       month: monthDate,
       worked: sumWorked(movements.filter((m) => inRange(m, from, to))),
-      target: sumTarget(from, to, settings),
+      target: sumTarget(from, to, settings, days),
+      excused: excusedHoursForRange(from, to, settings, days),
     });
   }
   return months;

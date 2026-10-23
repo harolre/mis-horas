@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import type { Account, ISODate, Movement } from '../../types';
-import { getSettings, listAccounts, listMovementsRange } from '../../db/repos';
+import type { Account, DayEntry, ISODate, Movement } from '../../types';
+import {
+  getSettings,
+  listAccounts,
+  listDaysRange,
+  listMovementsRange,
+} from '../../db/repos';
 import {
   addDays,
   addMonths,
@@ -42,6 +47,12 @@ const PERIOD_OPTIONS = [
   { value: 'year', label: 'Año' },
 ];
 
+const EXCUSED_KINDS = [
+  { kind: 'vacation', label: 'Vacaciones' },
+  { kind: 'sick', label: 'Baja' },
+  { kind: 'holiday', label: 'Festivo' },
+] as const;
+
 interface SummaryScreenProps {
   initialDate: string;
 }
@@ -79,8 +90,23 @@ export function SummaryScreen({ initialDate }: SummaryScreenProps) {
     [queryFrom, queryTo],
     [] as Movement[],
   );
+  const days = useLiveQuery(
+    () => listDaysRange(queryFrom, queryTo),
+    [queryFrom, queryTo],
+    [] as DayEntry[],
+  );
 
-  const totals = settings ? periodTotals(from, to, movements, settings) : null;
+  const totals = settings
+    ? periodTotals(
+        from,
+        to,
+        movements,
+        settings,
+        true,
+        days,
+        period === 'month' ? 'period' : 'weekly',
+      )
+    : null;
   const inPeriod = movements.filter(
     (movement) => movement.date >= from && movement.date <= to,
   );
@@ -102,16 +128,33 @@ export function SummaryScreen({ initialDate }: SummaryScreenProps) {
     .sort((a, b) => b.minutes - a.minutes);
   const maxAccount = Math.max(1, ...accountTotals.map((item) => item.minutes));
 
-  const periodDays = settings ? daysOfWeek(from, movements, settings) : [];
+  const periodDays = settings
+    ? daysOfWeek(from, movements, settings, days)
+    : [];
   const periodWeeks = settings
-    ? weeklyBreakdown(from, to, movements, settings)
+    ? weeklyBreakdown(from, to, movements, settings, days)
     : [];
   const periodMonths = settings
-    ? monthlyBreakdown(anchor, movements, settings)
+    ? monthlyBreakdown(anchor, movements, settings, days)
     : [];
-  const maxDay = Math.max(1, ...periodDays.map((day) => day.worked));
-  const maxWeek = Math.max(1, ...periodWeeks.map((week) => week.worked));
-  const maxMonth = Math.max(1, ...periodMonths.map((month) => month.worked));
+  const maxScheduledDay = Math.max(
+    1,
+    ...periodDays.map((day) => day.target + day.excused),
+  );
+  const maxDayExtraRatio = Math.max(
+    0,
+    ...periodDays.map((day) => {
+      const dayTarget = day.target + day.excused || maxScheduledDay;
+      return Math.max(0, day.worked - day.target) / dayTarget;
+    }),
+  );
+  const dayTargetTrackWidth = 100 / (1 + maxDayExtraRatio);
+  const maxMonth = Math.max(
+    1,
+    ...periodMonths.map(
+      (month) => month.worked + Object.values(month.excused).reduce((sum, n) => sum + n, 0),
+    ),
+  );
 
   function shift(direction: -1 | 1) {
     if (period === 'week') setAnchor(addDays(anchor, direction * 7));
@@ -212,7 +255,11 @@ export function SummaryScreen({ initialDate }: SummaryScreenProps) {
               <div className="stat-value">
                 {totals.extra > 0 ? formatDuration(totals.extra) : '—'}
               </div>
-              <div className="stat-note">Calculado por semana</div>
+              <div className="stat-note">
+                {period === 'month'
+                  ? 'Balance del mes'
+                  : 'Calculado por semana'}
+              </div>
             </div>
             <div className="stat">
               <div className="stat-label">Días</div>
@@ -281,6 +328,11 @@ export function SummaryScreen({ initialDate }: SummaryScreenProps) {
                   <div className="day-hours-legend" aria-label="Leyenda de horas">
                     <span><i className="day-hours-swatch target" /> Hasta objetivo</span>
                     <span><i className="day-hours-swatch excess" /> Exceso diario</span>
+                    {EXCUSED_KINDS.map(({ kind, label }) => (
+                      <span key={kind}>
+                        <i className={`day-hours-swatch ${kind}`} /> {label}
+                      </span>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -293,24 +345,35 @@ export function SummaryScreen({ initialDate }: SummaryScreenProps) {
                     <div className="breakdown-bar">
                       <div
                         className="progress day-hours-track"
-                        style={{ height: 8 }}
+                        style={{ height: 8, width: `${dayTargetTrackWidth}%` }}
                         role="img"
-                        aria-label={`${formatDuration(day.worked)} trabajadas; objetivo ${formatDuration(day.target)}`}
-                      >
-                        <span
-                          className="day-hours-segment target"
-                          style={{
-                            width: `${(Math.min(day.worked, day.target) / maxDay) * 100}%`,
-                          }}
-                        />
-                        {day.worked > day.target ? (
-                          <span
-                            className="day-hours-segment excess"
-                            style={{
-                              width: `${((day.worked - day.target) / maxDay) * 100}%`,
-                            }}
-                          />
-                        ) : null}
+                         aria-label={`${formatDuration(day.worked)} trabajadas; objetivo ajustado ${formatDuration(day.target)}${day.excused ? `; ${formatDuration(day.excused)} de ${day.kind === 'vacation' ? 'vacaciones' : day.kind === 'sick' ? 'baja' : 'festivo'}` : ''}`}
+                       >
+                         {day.excused > 0 ? (
+                           <span
+                              className={`day-hours-segment ${day.kind}`}
+                              style={{
+                                width: `${(day.excused / (day.target + day.excused || maxScheduledDay)) * 100}%`,
+                             }}
+                           />
+                         ) : (
+                           <>
+                             <span
+                                className="day-hours-segment target"
+                                style={{
+                                  width: `${(Math.min(day.worked, day.target) / (day.target + day.excused || maxScheduledDay)) * 100}%`,
+                               }}
+                             />
+                             {day.worked > day.target ? (
+                               <span
+                                  className="day-hours-segment excess"
+                                  style={{
+                                    width: `${((day.worked - day.target) / (day.target + day.excused || maxScheduledDay)) * 100}%`,
+                                 }}
+                               />
+                             ) : null}
+                           </>
+                         )}
                       </div>
                     </div>
                     <span
@@ -331,12 +394,30 @@ export function SummaryScreen({ initialDate }: SummaryScreenProps) {
                 <div>
                   <div className="card-title">Semanas del mes</div>
                   <div className="card-subtitle">
-                    Solo semanas cuyo lunes cae en el mes
+                    Días del mes agrupados por semanas
+                  </div>
+                  <div className="day-hours-legend" aria-label="Leyenda de horas">
+                    <span><i className="day-hours-swatch target" /> Trabajadas</span>
+                    {EXCUSED_KINDS.map(({ kind, label }) => (
+                      <span key={kind}>
+                        <i className={`day-hours-swatch ${kind}`} /> {label}
+                      </span>
+                    ))}
                   </div>
                 </div>
               </div>
               <div className="list">
-                {periodWeeks.map((week) => (
+                {periodWeeks.map((week) => {
+                  const excusedMinutes = Object.values(week.excused).reduce(
+                    (sum, minutes) => sum + minutes,
+                    0,
+                  );
+                  const barScale = Math.max(
+                    1,
+                    week.target + excusedMinutes,
+                    week.worked + excusedMinutes,
+                  );
+                  return (
                   <div className="breakdown-row" key={week.start}>
                     <span className="breakdown-name" style={{ width: 92 }}>
                       {formatShortDate(week.start)} –{' '}
@@ -344,12 +425,23 @@ export function SummaryScreen({ initialDate }: SummaryScreenProps) {
                     </span>
                     <div className="breakdown-bar">
                       <div className="progress" style={{ height: 6 }}>
-                        <div
-                          className="progress-bar"
-                          style={{
-                            width: `${(week.worked / maxWeek) * 100}%`,
-                          }}
-                        />
+                        <div className="hours-stack">
+                          <span
+                            className="hours-stack-segment worked"
+                            style={{ width: `${(week.worked / barScale) * 100}%` }}
+                          />
+                          {EXCUSED_KINDS.map(({ kind }) =>
+                            week.excused[kind] > 0 ? (
+                              <span
+                                key={kind}
+                                className={`hours-stack-segment ${kind}`}
+                                style={{
+                                  width: `${(week.excused[kind] / barScale) * 100}%`,
+                                }}
+                              />
+                            ) : null,
+                          )}
+                        </div>
                       </div>
                     </div>
                     {week.extra > 0 ? (
@@ -361,7 +453,8 @@ export function SummaryScreen({ initialDate }: SummaryScreenProps) {
                       {formatDuration(week.worked)}
                     </span>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
           ) : null}
@@ -372,7 +465,15 @@ export function SummaryScreen({ initialDate }: SummaryScreenProps) {
                 <div>
                   <div className="card-title">Meses del año</div>
                   <div className="card-subtitle">
-                    Horas registradas y objetivo mensual
+                    Horas trabajadas y justificadas por mes
+                  </div>
+                  <div className="day-hours-legend" aria-label="Leyenda de horas">
+                    <span><i className="day-hours-swatch target" /> Trabajadas</span>
+                    {EXCUSED_KINDS.map(({ kind, label }) => (
+                      <span key={kind}>
+                        <i className={`day-hours-swatch ${kind}`} /> {label}
+                      </span>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -384,12 +485,23 @@ export function SummaryScreen({ initialDate }: SummaryScreenProps) {
                     </span>
                     <div className="breakdown-bar">
                       <div className="progress" style={{ height: 6 }}>
-                        <div
-                          className="progress-bar"
-                          style={{
-                            width: `${(month.worked / maxMonth) * 100}%`,
-                          }}
-                        />
+                        <div className="hours-stack">
+                          <span
+                            className="hours-stack-segment worked"
+                            style={{ width: `${(month.worked / maxMonth) * 100}%` }}
+                          />
+                          {EXCUSED_KINDS.map(({ kind }) =>
+                            month.excused[kind] > 0 ? (
+                              <span
+                                key={kind}
+                                className={`hours-stack-segment ${kind}`}
+                                style={{
+                                  width: `${(month.excused[kind] / maxMonth) * 100}%`,
+                                }}
+                              />
+                            ) : null,
+                          )}
+                        </div>
                       </div>
                     </div>
                     <span
@@ -408,8 +520,9 @@ export function SummaryScreen({ initialDate }: SummaryScreenProps) {
             <div className="banner">
               <Icon name="info" size={16} />
               <span>
-                El exceso se calcula por semanas completas: se suman los extras
-                de las semanas cuyo lunes cae dentro del periodo.
+                {period === 'month'
+                  ? 'El extra global compara las horas trabajadas con el objetivo del mes. Los distintivos de cada semana muestran su extra semanal.'
+                  : 'Las extras se calculan por semanas; en este resumen solo se cuentan los días incluidos en el periodo seleccionado.'}
               </span>
             </div>
           ) : null}

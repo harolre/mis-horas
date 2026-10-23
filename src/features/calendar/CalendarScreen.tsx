@@ -74,7 +74,7 @@ export function CalendarScreen({ onSelectDate }: CalendarScreenProps) {
   }
   const dayByDate = new Map(days.map((day) => [day.date, day]));
   const monthTotals = settings
-    ? periodTotals(monthFrom, monthTo, movements, settings, false)
+    ? periodTotals(monthFrom, monthTo, movements, settings, false, days)
     : null;
 
   const weekdayLabels = Array.from({ length: 7 }, (_, index) =>
@@ -84,7 +84,7 @@ export function CalendarScreen({ onSelectDate }: CalendarScreenProps) {
   function cellClass(date: string, inMonth: boolean): string {
     const day = dayByDate.get(date);
     const worked = workedByDate.get(date) ?? 0;
-    const target = settings ? targetForDate(date, settings) : 0;
+    const target = settings ? targetForDate(date, settings, days) : 0;
     let className = 'calendar-cell';
     if (!inMonth) className += ' outside';
     if (day?.kind === 'vacation') className += ' vacation';
