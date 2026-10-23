@@ -8,6 +8,7 @@ import {
 } from '../../domain/time';
 import { Icon } from '../../components/Icon';
 import type { DraftMovement } from './dayDraft';
+import { loadMovementTemplates } from './movementTemplates';
 
 interface MovementDraftFormProps {
   accounts: Account[];
@@ -59,6 +60,8 @@ export function MovementDraftForm({
   );
   const [note, setNote] = useState(initialNote);
   const [error, setError] = useState('');
+  const [templates] = useState(loadMovementTemplates);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const formDirty =
     accountId !== initialAccount ||
     start !== initialStart ||
@@ -148,6 +151,23 @@ export function MovementDraftForm({
     });
   }
 
+  function applyTemplate(id: string) {
+    setSelectedTemplateId(id);
+    const template = templates.find((item) => item.id === id);
+    if (!template) return;
+    const accountIsUsable = usableAccounts.some(
+      (account) => account.id === template.accountId,
+    );
+    setAccountId(
+      accountIsUsable ? template.accountId : usableAccounts[0]?.id ?? '',
+    );
+    setStart(formatTime(template.startMin));
+    setEnd(formatTime(template.endMin));
+    setBreakMin(String(template.breakMin));
+    setCrossesMidnight(template.crossesMidnight);
+    setError('');
+  }
+
   return (
     <div className="movement-draft-form" ref={formRef}>
       <div className="movement-draft-head">
@@ -155,6 +175,28 @@ export function MovementDraftForm({
           {editing ? 'Editar tramo' : 'Nuevo tramo'}
         </div>
         <span className="badge">Borrador</span>
+      </div>
+
+      <div className="field">
+        <label className="field-label" htmlFor="movement-template-select">
+          Aplicar plantilla
+        </label>
+        <select
+          id="movement-template-select"
+          className="select"
+          value={selectedTemplateId}
+          disabled={templates.length === 0}
+          onChange={(event) => applyTemplate(event.target.value)}
+        >
+          <option value="">
+            {templates.length === 0 ? 'No hay plantillas' : 'Elegir plantilla…'}
+          </option>
+          {templates.map((template) => (
+            <option key={template.id} value={template.id}>
+              {template.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="field">

@@ -21,6 +21,7 @@ import { ScreenHeader } from '../../components/ScreenHeader';
 import { Icon } from '../../components/Icon';
 import { ProgressBar } from '../../components/ProgressBar';
 import { DayEditorSheet } from './DayEditorSheet';
+import { MovementTemplatesSection } from './MovementTemplatesSection';
 import { kindInfo } from './dayKinds';
 
 interface TodayScreenProps {
@@ -288,6 +289,8 @@ export function TodayScreen({
           );
         })}
       </section>
+
+      <MovementTemplatesSection accounts={accounts ?? []} />
 
       {editingDate ? (
         <DayEditorSheet

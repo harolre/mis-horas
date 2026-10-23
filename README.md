@@ -2,12 +2,13 @@
 
 Aplicación web local para registrar las horas de trabajo, consultar objetivos y extras, guardar adjuntos y exportar copias de seguridad cifradas.
 
-No tiene backend, no sincroniza datos y no envía información a ningún servidor. Todo se guarda en el almacenamiento del navegador mediante IndexedDB. La app funciona sin conexión una vez instalada o cargada, y está pensada para usarse como PWA en el móvil, especialmente en iPhone.
+No tiene backend, no sincroniza datos y no envía información a ningún servidor. Los datos de la app se guardan en el almacenamiento del navegador mediante IndexedDB; las plantillas de tramos se guardan localmente en el navegador. La app funciona sin conexión una vez instalada o cargada, y está pensada para usarse como PWA en el móvil, especialmente en iPhone.
 
 ## Características
 
 - Vista semanal compacta en **Inicio**, con los siete días y una hoja por día para editar el estado, los tramos, los adjuntos y la nota.
 - Registro de tramos de trabajo por día, con hora de inicio, fin, descanso y cuenta. Los cambios del día se confirman juntos con **Guardar día**.
+- Crea plantillas locales de tramos con cuenta, horario y pausa, y aplícalas al registrar jornadas frecuentes.
 - Varias cuentas con color, archivo y totales por cuenta.
 - Objetivo semanal global, con horas distintas para cada día de la semana.
 - Excepciones de objetivo para fechas concretas.
@@ -133,8 +134,8 @@ Formato de seguridad de las copias:
 - Se admiten imágenes JPG, PNG, WebP, HEIC/HEIF y archivos PDF.
 - Tamaño máximo de entrada: 25 MB por archivo.
 - Tamaño máximo guardado: 10 MB por archivo.
-- Límite total: 100 MB de adjuntos.
-- Las imágenes se recomprimen y se guardan con una miniatura separada.
+- No hay un límite total fijo de adjuntos en la app; el espacio disponible depende de la cuota del navegador y del dispositivo.
+- Todas las imágenes se optimizan, independientemente de su tamaño, intentando reducir al menos un 50 % y con un objetivo máximo de 800 KB. Se prueba WebP y, si no alcanza el objetivo, JPEG; si no es posible llegar a la mitad, se usa la versión más pequeña que mejore el original. Se conserva el original si ninguna lo reduce y se guarda una miniatura separada.
 - Los PDF con texto suficiente se optimizan sin pérdida cuando el resultado es más pequeño; los PDF sin texto se rasterizan si así se reduce el tamaño.
 - Un PDF protegido con contraseña o dañado se rechaza.
 

@@ -3,7 +3,6 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import type { ThemeMode, Weekday } from '../../types';
 import {
   attachmentStats,
-  cleanupAttachments,
   eraseAllData,
   getSettings,
   saveSettings,
@@ -16,7 +15,6 @@ import {
   minutesToHoursInput,
 } from '../../domain/time';
 import { formatShortDate, todayISO } from '../../domain/date';
-import { MAX_TOTAL_ATTACHMENT_BYTES } from '../../attachments/constants';
 import { APP_VERSION } from '../../version';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { Icon } from '../../components/Icon';
@@ -40,6 +38,9 @@ const THEME_OPTIONS = [
 ];
 
 const DAY_LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+const DAILY_TARGET_OPTIONS = Array.from({ length: 97 }, (_, index) =>
+  String(index * 15),
+);
 
 function formatLastBackup(value: string | null): string {
   if (!value) return 'Nunca';
@@ -79,7 +80,6 @@ export function SettingsScreen({
   const [storage, setStorage] = useState<{ usage: number; quota: number } | null>(
     null,
   );
-  const [persisted, setPersisted] = useState<boolean | null>(null);
   const [lastBackup, setLastBackup] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -110,25 +110,11 @@ export function SettingsScreen({
           usage: estimate.usage ?? 0,
           quota: estimate.quota ?? 0,
         });
-      }
-      if (navigator.storage?.persisted) {
-        setPersisted(await navigator.storage.persisted());
-      }
+      } else setStorage(null);
     } catch {
-      setPersisted(null);
+      setStorage(null);
     }
   }
-
-  const isIOS =
-    typeof navigator !== 'undefined' &&
-    (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
-  const standalone =
-    typeof window !== 'undefined' &&
-    (window.matchMedia('(display-mode: standalone)').matches ||
-      Boolean(
-        (navigator as Navigator & { standalone?: boolean }).standalone,
-      ));
 
   const weeklyTarget = targets.reduce(
     (total, value) => total + (hoursToMinutes(value) ?? 0),
@@ -207,38 +193,6 @@ export function SettingsScreen({
     }
   }
 
-  async function requestPersistence() {
-    try {
-      const granted = await navigator.storage?.persist?.();
-      if (typeof granted === 'boolean') {
-        setPersisted(granted);
-        toast(
-          granted
-            ? 'El navegador mantendrá los datos de forma persistente.'
-            : 'El navegador no ha concedido almacenamiento persistente.',
-          granted ? 'success' : 'info',
-        );
-      }
-    } catch {
-      toast('No se pudo solicitar almacenamiento persistente.', 'error');
-    }
-  }
-
-  async function cleanAttachments() {
-    try {
-      const result = await cleanupAttachments();
-      toast(
-        result.removed > 0
-          ? `Se eliminaron ${result.removed} archivo(s) huérfano(s).`
-          : 'No había archivos huérfanos.',
-        'success',
-      );
-      void refreshStorage();
-    } catch (error) {
-      toast((error as Error).message, 'error');
-    }
-  }
-
   function markExported() {
     const now = new Date().toISOString();
     try {
@@ -267,14 +221,9 @@ export function SettingsScreen({
     }
   }
 
-  const storagePercent =
-    storage && storage.quota > 0
-      ? Math.min(1, storage.usage / storage.quota)
-      : 0;
-  const attachmentsPercent = Math.min(
-    1,
-    stats.totalSize / MAX_TOTAL_ATTACHMENT_BYTES,
-  );
+  const estimatedAvailable = storage && storage.quota > 0
+    ? Math.max(0, storage.quota - storage.usage)
+    : null;
 
   return (
     <div className="screen">
@@ -345,22 +294,23 @@ export function SettingsScreen({
               {DAY_LABELS.map((day, index) => (
                 <label className="target-item" key={day}>
                   <span className="target-day">{day}</span>
-                  <input
+                  <select
                     className="target-input"
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    max={24}
-                    step={0.25}
-                    value={targets[index] ?? '0'}
+                    value={String(hoursToMinutes(targets[index] ?? '0') ?? 0)}
                     disabled={!settings}
                     onChange={(event) =>
-                      updateTarget(index, event.target.value)
+                      updateTarget(index, String(Number(event.target.value) / 60))
                     }
                     aria-label={`Objetivo del ${weekdayLabel(
                       (index + 1) as Weekday,
                     )}`}
-                  />
+                  >
+                    {DAILY_TARGET_OPTIONS.map((minutes) => (
+                      <option key={minutes} value={minutes}>
+                        {formatDuration(Number(minutes))}
+                      </option>
+                    ))}
+                  </select>
                 </label>
               ))}
             </div>
@@ -478,89 +428,22 @@ export function SettingsScreen({
         <div className="settings-card">
           <div className="settings-row">
             <div>
-              <div className="settings-title">Adjuntos</div>
+              <div className="settings-title">Adjuntos guardados</div>
               <div className="settings-desc">
                 {stats.count} {stats.count === 1 ? 'archivo' : 'archivos'} ·{' '}
-                {formatFileSize(stats.totalSize)} de 100 MB
+                {formatFileSize(stats.totalSize)}
               </div>
-            </div>
-            <span className="badge">{Math.round(attachmentsPercent * 100)} %</span>
-          </div>
-          <div className="settings-row column" style={{ gap: 6 }}>
-            <div className="progress">
-              <div
-                className="progress-bar"
-                style={{ width: `${attachmentsPercent * 100}%` }}
-              />
-            </div>
-            <div className="row-between tiny muted">
-              <span>Límite de adjuntos</span>
-              <span>100 MB</span>
             </div>
           </div>
           <div className="settings-row">
             <div>
-              <div className="settings-title">Almacenamiento del navegador</div>
+              <div className="settings-title">Espacio disponible estimado</div>
               <div className="settings-desc">
-                {storage
-                  ? `${formatFileSize(storage.usage)} usados${
-                      storage.quota > 0
-                        ? ` de ${formatFileSize(storage.quota)}`
-                        : ''
-                    }`
-                  : 'Calculando…'}
+                {estimatedAvailable === null
+                  ? 'No disponible'
+                  : formatFileSize(estimatedAvailable)}
               </div>
             </div>
-            <span className={`badge ${persisted ? 'success' : ''}`}>
-              {persisted === null
-                ? 'No disponible'
-                : persisted
-                  ? 'Persistente'
-                  : 'No persistente'}
-            </span>
-          </div>
-          {storage && storage.quota > 0 ? (
-            <div className="settings-row column" style={{ gap: 6 }}>
-              <div className="progress" style={{ height: 6 }}>
-                <div
-                  className="progress-bar"
-                  style={{ width: `${storagePercent * 100}%` }}
-                />
-              </div>
-            </div>
-          ) : null}
-          {persisted === false ? (
-            <div className="settings-row">
-              <div>
-                <div className="settings-title">Evitar borrados automáticos</div>
-                <div className="settings-desc">
-                  Pide al navegador que conserve los datos ante falta de
-                  espacio.
-                </div>
-              </div>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => void requestPersistence()}
-              >
-                Solicitar
-              </button>
-            </div>
-          ) : null}
-          <div className="settings-row">
-            <div>
-              <div className="settings-title">Mantenimiento</div>
-              <div className="settings-desc">
-                Elimina archivos huérfanos y recalcula los contadores.
-              </div>
-            </div>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => void cleanAttachments()}
-            >
-              Limpiar
-            </button>
           </div>
         </div>
       </section>
@@ -613,60 +496,6 @@ export function SettingsScreen({
             puede recuperar. Importar una copia reemplaza todos los datos
             actuales.
           </span>
-        </div>
-      </section>
-
-      <section className="settings-section">
-        <h2 className="section-title">Instalación</h2>
-        <div className="settings-card">
-          <div className="settings-row column" style={{ gap: 9 }}>
-            <div>
-              <div className="settings-title">
-                {standalone ? 'App instalada' : 'Instalar en iPhone'}
-              </div>
-              <div className="settings-desc">
-                {standalone
-                  ? 'Mis Horas se está ejecutando como app instalada y funciona sin conexión.'
-                  : 'Añádela a la pantalla de inicio para usarla como una app y sin conexión.'}
-              </div>
-            </div>
-            {standalone ? (
-              <div className="banner success">
-                <Icon name="check" size={16} />
-                <span>Ya está instalada en este dispositivo.</span>
-              </div>
-            ) : isIOS ? (
-              <ol className="install-steps">
-                <li>Abre esta página en Safari.</li>
-                <li>
-                  Toca el botón <strong>Compartir</strong> (el cuadrado con la
-                  flecha).
-                </li>
-                <li>
-                  Elige <strong>Añadir a pantalla de inicio</strong>.
-                </li>
-                <li>
-                  Abre <strong>Mis Horas</strong> desde el icono nuevo.
-                </li>
-              </ol>
-            ) : (
-              <p className="settings-desc">
-                En el iPhone, abre esta web en Safari y usa Compartir → Añadir a
-                pantalla de inicio. En otros navegadores, usa la opción
-                «Instalar aplicación».
-              </p>
-            )}
-            {!standalone ? (
-              <div className="banner">
-                <Icon name="info" size={16} />
-                <span>
-                  En iPhone, la app instalada puede usar un almacenamiento
-                  distinto al de Safari. Usa siempre la app instalada y exporta
-                  las copias desde ella.
-                </span>
-              </div>
-            ) : null}
-          </div>
         </div>
       </section>
 

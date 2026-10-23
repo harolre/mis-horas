@@ -56,8 +56,9 @@ describe('copias cifradas', () => {
     expect(parsed.meta.settings.dateOverrides['2026-12-24']).toBe(240);
     expect(parsed.attachments).toHaveLength(1);
     expect(parsed.attachments[0].size).toBe(5000);
-    expect(parsed.attachments[0].thumb).not.toBeNull();
-    expect(parsed.files[0].blob.size).toBe(5000);
+    expect(parsed.attachments[0].thumb).toBeInstanceOf(Blob);
+    expect(parsed.files[0].blob).toBeInstanceOf(Blob);
+    expect((parsed.files[0].blob as Blob).size).toBe(5000);
 
     await applyBackup(parsed);
     expect(await db.movements.count()).toBe(1);

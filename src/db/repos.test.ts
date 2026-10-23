@@ -9,6 +9,7 @@ import {
   deleteAttachment,
   deleteDayData,
   deleteMovement,
+  getAttachmentFile,
   listAttachments,
   listMovementsByDate,
   saveDayDraft,
@@ -81,14 +82,21 @@ describe('repositorio', () => {
 
   it('gestiona adjuntos y su contador', async () => {
     await setDayKind('2026-10-21', 'work', 'Con parte');
+    const thumb = new Blob(['miniatura'], { type: 'image/jpeg' });
     const attachment = await addAttachment({
       date: '2026-10-21',
       name: 'parte.pdf',
       mime: 'application/pdf',
       size: 100,
-      thumb: null,
+      thumb,
       blob: new Blob([new Uint8Array(100)]),
     });
+    const storedAttachment = await db.attachments.get(attachment.id);
+    const storedFile = await db.attachmentFiles.get(attachment.id);
+    expect(storedAttachment?.thumb).toBeInstanceOf(ArrayBuffer);
+    expect(storedFile?.blob).toBeInstanceOf(ArrayBuffer);
+    expect((await getAttachmentFile(attachment.id))?.size).toBe(100);
+    expect((await listAttachments('2026-10-21'))[0].thumb).toBeInstanceOf(Blob);
     let stats = await attachmentStats();
     expect(stats.count).toBe(1);
     expect(stats.totalSize).toBe(100);
@@ -227,7 +235,7 @@ describe('repositorio', () => {
           name: 'nuevo.jpg',
           mime: 'image/jpeg',
           size: 40,
-          thumb: null,
+          thumb: new Blob(['thumbnail'], { type: 'image/jpeg' }),
           blob: new Blob([new Uint8Array(40)]),
         },
       ],
@@ -249,6 +257,15 @@ describe('repositorio', () => {
     expect(attachments.some((item) => item.id === oldAttachment.id)).toBe(false);
     expect(attachments.some((item) => item.id === keptAttachment.id)).toBe(true);
     expect(attachments.some((item) => item.name === 'nuevo.jpg')).toBe(true);
+    const newAttachment = attachments.find((item) => item.name === 'nuevo.jpg');
+    expect(newAttachment?.thumb).toBeInstanceOf(Blob);
+    expect(
+      (await db.attachments.get(newAttachment!.id))?.thumb,
+    ).toBeInstanceOf(ArrayBuffer);
+    expect(
+      (await db.attachmentFiles.get(newAttachment!.id))?.blob,
+    ).toBeInstanceOf(ArrayBuffer);
+    expect((await getAttachmentFile(newAttachment!.id))?.size).toBe(40);
 
     const day = await db.days.get('2026-10-21');
     expect(day?.kind).toBe('work');

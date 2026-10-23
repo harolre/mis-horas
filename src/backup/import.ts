@@ -1,4 +1,5 @@
 import { db } from '../db/db';
+import { binaryToArrayBuffer } from '../db/binary';
 import { defaultAccount, defaultSettings } from '../db/defaults';
 import { isValidISODate } from '../domain/date';
 import type {
@@ -370,6 +371,21 @@ export async function applyBackup(
     updatedAt: Date.now(),
   };
 
+  const [storedAttachments, storedFiles] = await Promise.all([
+    Promise.all(
+      attachments.map(async (attachment) => ({
+        ...attachment,
+        thumb: await binaryToArrayBuffer(attachment.thumb),
+      })),
+    ),
+    Promise.all(
+      files.map(async (file) => ({
+        ...file,
+        blob: file.blob instanceof Blob ? await file.blob.arrayBuffer() : file.blob,
+      })),
+    ),
+  ]);
+
   progress({ phase: 'writing', completed: 0, total: 1, percent: 0 });
   await db.transaction(
     'rw',
@@ -394,8 +410,8 @@ export async function applyBackup(
       await db.movements.bulkPut(meta.movements);
       await db.days.bulkPut(days);
       await db.settings.put(settings);
-      await db.attachments.bulkPut(attachments);
-      await db.attachmentFiles.bulkPut(files);
+      await db.attachments.bulkPut(storedAttachments);
+      await db.attachmentFiles.bulkPut(storedFiles);
     },
   );
   progress({ phase: 'writing', completed: 1, total: 1, percent: 1 });

@@ -38,13 +38,13 @@ export interface Attachment {
   name: string;
   mime: string;
   size: number;
-  thumb: Blob | null;
+  thumb: Blob | ArrayBuffer | null;
   createdAt: number;
 }
 
 export interface AttachmentFile {
   id: string;
-  blob: Blob;
+  blob: Blob | ArrayBuffer;
 }
 
 export interface Settings {

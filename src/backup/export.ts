@@ -1,4 +1,5 @@
 import { db } from '../db/db';
+import { binaryToBlob } from '../db/binary';
 import type { Attachment } from '../types';
 import { APP_VERSION } from '../version';
 import { todayISO } from '../domain/date';
@@ -70,7 +71,10 @@ export async function createBackup(
   const attachmentMeta: BackupAttachmentMeta[] = [];
 
   for (const attachment of attachments) {
-    const blob = fileMap.get(attachment.id);
+    const storedFile = fileMap.get(attachment.id);
+    const blob = storedFile
+      ? binaryToBlob(storedFile, attachment.mime)
+      : null;
     if (!blob) continue;
     attachmentMeta.push({
       id: attachment.id,
@@ -86,12 +90,15 @@ export async function createBackup(
     });
     dataParts.push(blob);
     mainOffset += blob.size;
-    usableAttachments.push(attachment);
+    usableAttachments.push({
+      ...attachment,
+      thumb: binaryToBlob(attachment.thumb, 'image/jpeg'),
+    });
   }
 
   let thumbOffset = mainOffset;
   for (const attachment of usableAttachments) {
-    const thumb = attachment.thumb;
+    const thumb = binaryToBlob(attachment.thumb, 'image/jpeg');
     const meta = attachmentMeta.find((item) => item.id === attachment.id);
     if (!meta) continue;
     if (thumb) {

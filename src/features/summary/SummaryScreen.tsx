@@ -278,6 +278,10 @@ export function SummaryScreen({ initialDate }: SummaryScreenProps) {
                   <div className="card-subtitle">
                     {formatWeekday(from)} a {formatWeekday(to)}
                   </div>
+                  <div className="day-hours-legend" aria-label="Leyenda de horas">
+                    <span><i className="day-hours-swatch target" /> Hasta objetivo</span>
+                    <span><i className="day-hours-swatch excess" /> Exceso diario</span>
+                  </div>
                 </div>
               </div>
               <div className="list">
@@ -287,13 +291,26 @@ export function SummaryScreen({ initialDate }: SummaryScreenProps) {
                       {formatWeekday(day.date)} {formatShortDate(day.date)}
                     </span>
                     <div className="breakdown-bar">
-                      <div className="progress" style={{ height: 6 }}>
-                        <div
-                          className="progress-bar"
+                      <div
+                        className="progress day-hours-track"
+                        style={{ height: 8 }}
+                        role="img"
+                        aria-label={`${formatDuration(day.worked)} trabajadas; objetivo ${formatDuration(day.target)}`}
+                      >
+                        <span
+                          className="day-hours-segment target"
                           style={{
-                            width: `${(day.worked / maxDay) * 100}%`,
+                            width: `${(Math.min(day.worked, day.target) / maxDay) * 100}%`,
                           }}
                         />
+                        {day.worked > day.target ? (
+                          <span
+                            className="day-hours-segment excess"
+                            style={{
+                              width: `${((day.worked - day.target) / maxDay) * 100}%`,
+                            }}
+                          />
+                        ) : null}
                       </div>
                     </div>
                     <span

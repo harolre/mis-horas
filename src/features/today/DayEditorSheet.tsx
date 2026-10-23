@@ -9,13 +9,13 @@ import type {
   Movement,
 } from '../../types';
 import {
-  attachmentStats,
   listAttachments,
   saveDayDraft,
 } from '../../db/repos';
+import { binaryToBlob } from '../../db/binary';
 import { formatLongDate } from '../../domain/date';
-import { formatDuration, formatFileSize, formatTime } from '../../domain/time';
-import { checkTotalLimit, prepareAttachment } from '../../attachments/process';
+import { formatDuration, formatTime } from '../../domain/time';
+import { prepareAttachment } from '../../attachments/process';
 import type { AttachmentProgress } from '../../attachments/process';
 import { Modal, ConfirmDialog } from '../../components/Modal';
 import { Icon } from '../../components/Icon';
@@ -243,24 +243,6 @@ export function DayEditorSheet({
       // La persistencia es una mejora, no un requisito.
     }
 
-    let projectedTotal: number;
-    try {
-      const stats = await attachmentStats();
-      projectedTotal = stats.totalSize;
-      for (const attachment of attachments) {
-        if (pendingDeletes.has(attachment.id)) {
-          projectedTotal -= attachment.size;
-        }
-      }
-      for (const pending of pendingAdds) {
-        projectedTotal += pending.attachment.size;
-      }
-    } catch {
-      if (mountedRef.current) setProcessing(null);
-      abortRef.current = null;
-      toast('No se pudo comprobar el espacio de los adjuntos.', 'error');
-      return;
-    }
     if (!mountedRef.current) return;
 
     for (const [index, file] of list.entries()) {
@@ -298,35 +280,13 @@ export function DayEditorSheet({
         });
         if (!mountedRef.current) return;
         if (controller.signal.aborted) break;
-        const limitError = checkTotalLimit(
-          projectedTotal,
-          prepared.finalSize,
-        );
-        if (limitError) throw new Error(limitError);
 
         setPendingAdds((current) => [
           ...current,
           pendingFromPrepared(date, prepared),
         ]);
-        projectedTotal += prepared.finalSize;
 
-        const savedPercent =
-          prepared.originalSize > 0
-            ? Math.max(
-                0,
-                Math.round(
-                  (1 - prepared.finalSize / prepared.originalSize) * 100,
-                ),
-              )
-            : 0;
-        toast(
-          `${prepared.name}: ${formatFileSize(
-            prepared.originalSize,
-          )} → ${formatFileSize(
-            prepared.finalSize,
-          )} (−${savedPercent} %). Se guardará con el día.`,
-          'success',
-        );
+        toast('Adjunto optimizado. Se guardará al guardar el día.', 'success');
       } catch (fileError) {
         if (!mountedRef.current) break;
         if ((fileError as Error).name === 'AbortError') {
@@ -406,7 +366,7 @@ export function DayEditorSheet({
           name: pending.attachment.name,
           mime: pending.attachment.mime,
           size: pending.attachment.size,
-          thumb: pending.attachment.thumb,
+          thumb: binaryToBlob(pending.attachment.thumb, 'image/jpeg'),
           blob: pending.blob,
         })),
         attachmentDeletes: Array.from(pendingDeletes),
@@ -420,8 +380,12 @@ export function DayEditorSheet({
       setSaving(false);
       onClose();
     } catch (saveError) {
+      const errorName = (saveError as Error).name;
       const message =
-        (saveError as Error).message || 'No se pudieron guardar los cambios.';
+        errorName === 'QuotaExceededError'
+          ? 'El navegador no tiene espacio suficiente para guardar. Libera espacio del sitio o exporta una copia de seguridad e inténtalo de nuevo.'
+          : (saveError as Error).message ||
+            'No se pudieron guardar los cambios.';
       setSaving(false);
       setError(message);
       toast(message, 'error');
@@ -431,7 +395,7 @@ export function DayEditorSheet({
   return (
     <Modal
       title={formatLongDate(date)}
-      subtitle="Horas, adjuntos y nota"
+      subtitle="Horas y adjuntos"
       onClose={requestClose}
       dismissible={!saving}
       footer={
@@ -770,11 +734,7 @@ export function DayEditorSheet({
               </div>
             ))}
           </div>
-        ) : (
-          <p className="field-hint">
-            Puedes adjuntar imágenes o PDF como justificante del día.
-          </p>
-        )}
+        ) : null}
 
         <input
           ref={fileInputRef}
@@ -785,26 +745,9 @@ export function DayEditorSheet({
           onChange={(event) => void handleFiles(event.target.files)}
         />
         <p className="field-hint">
-          Imágenes y PDF. Máximo 25 MB de entrada, 10 MB por archivo y 100 MB en
-          total. Los adjuntos se guardan al confirmar el día.
+          Los adjuntos se optimizan automáticamente. Se guardan al pulsar
+          «Guardar día».
         </p>
-      </div>
-
-      <div className="sheet-section day-note-block">
-        <label className="field-label" htmlFor="day-note">
-          Nota del día
-        </label>
-        <textarea
-          id="day-note"
-          className="textarea"
-          value={note}
-          maxLength={800}
-          onChange={(event) => setNote(event.target.value)}
-          placeholder="Ej. incidencia, tarea principal, incidencias…"
-        />
-        <span className="field-hint">
-          Se guardará al pulsar «Guardar día».
-        </span>
       </div>
 
       {hasData ? (

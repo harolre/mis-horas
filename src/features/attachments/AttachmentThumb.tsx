@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Attachment } from '../../types';
 import { Icon } from '../../components/Icon';
+import { binaryToBlob } from '../../db/binary';
 
 export function AttachmentThumb({ attachment }: { attachment: Attachment }) {
   const [url, setUrl] = useState<string | null>(null);
@@ -10,7 +11,9 @@ export function AttachmentThumb({ attachment }: { attachment: Attachment }) {
       setUrl(null);
       return;
     }
-    const objectUrl = URL.createObjectURL(attachment.thumb);
+    const thumbBlob = binaryToBlob(attachment.thumb, 'image/jpeg');
+    if (!thumbBlob) return;
+    const objectUrl = URL.createObjectURL(thumbBlob);
     setUrl(objectUrl);
     return () => URL.revokeObjectURL(objectUrl);
   }, [attachment.thumb]);

@@ -1,7 +1,6 @@
 import {
   MAX_ATTACHMENT_BYTES,
   MAX_INPUT_BYTES,
-  MAX_TOTAL_ATTACHMENT_BYTES,
 } from './constants';
 import { compressImage } from './image';
 import { compressPdf } from './pdf';
@@ -137,19 +136,9 @@ export async function prepareAttachment(
       originalSize: file.size,
       finalSize: result.blob.size,
       kind: 'image',
-      compression: 'imagen',
+      compression: result.blob === file ? 'original' : 'imagen',
     };
   }
 
   throw new Error('Solo se admiten imágenes (JPG, PNG, WebP, HEIC) o PDF.');
-}
-
-export function checkTotalLimit(
-  currentTotal: number,
-  incomingSize: number,
-): string | null {
-  if (currentTotal + incomingSize > MAX_TOTAL_ATTACHMENT_BYTES) {
-    return 'Se alcanzaría el límite de 100 MB de adjuntos. Borra algún archivo antes de añadir otro.';
-  }
-  return null;
 }

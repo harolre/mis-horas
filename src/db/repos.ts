@@ -10,8 +10,12 @@ import type {
 } from '../types';
 import { isValidISODate } from '../domain/date';
 import { durationMinutes, movementsOverlap } from '../domain/time';
-import { MAX_TOTAL_ATTACHMENT_BYTES } from '../attachments/constants';
 import { db } from './db';
+import { binaryToBlob, blobToArrayBuffer } from './binary';
+
+export type AttachmentWithBlobThumb = Omit<Attachment, 'thumb'> & {
+  thumb: Blob | null;
+};
 import {
   ACCOUNT_COLORS,
   defaultAccount,
@@ -426,6 +430,10 @@ export async function addAttachment(input: AttachmentInput): Promise<Attachment>
   if (input.size <= 0 || !input.blob.size) {
     throw new ValidationError('El archivo está vacío.');
   }
+  const [storedThumb, storedBlob] = await Promise.all([
+    blobToArrayBuffer(input.thumb),
+    input.blob.arrayBuffer(),
+  ]);
   return db.transaction(
     'rw',
     db.attachments,
@@ -439,11 +447,11 @@ export async function addAttachment(input: AttachmentInput): Promise<Attachment>
         name: input.name,
         mime: input.mime,
         size: input.size,
-        thumb: input.thumb,
+        thumb: storedThumb,
         createdAt: now,
       };
       await db.attachments.add(attachment);
-      await db.attachmentFiles.add({ id: attachment.id, blob: input.blob });
+      await db.attachmentFiles.add({ id: attachment.id, blob: storedBlob });
       const day = await db.days.get(input.date);
       await db.days.put({
         date: input.date,
@@ -452,19 +460,31 @@ export async function addAttachment(input: AttachmentInput): Promise<Attachment>
         attachmentCount: (day?.attachmentCount ?? 0) + 1,
         updatedAt: now,
       });
-      return attachment;
+      return { ...attachment, thumb: input.thumb };
     },
   );
 }
 
-export async function listAttachments(date: ISODate): Promise<Attachment[]> {
+export async function listAttachments(
+  date: ISODate,
+): Promise<AttachmentWithBlobThumb[]> {
   const attachments = await db.attachments.where('date').equals(date).toArray();
-  return attachments.sort((a, b) => a.createdAt - b.createdAt);
+  return attachments
+    .map((attachment) => ({
+      ...attachment,
+      thumb: binaryToBlob(attachment.thumb, 'image/jpeg'),
+    }))
+    .sort((a, b) => a.createdAt - b.createdAt);
 }
 
 export async function getAttachmentFile(id: string): Promise<Blob | null> {
-  const file = await db.attachmentFiles.get(id);
-  return file?.blob ?? null;
+  const [file, attachment] = await Promise.all([
+    db.attachmentFiles.get(id),
+    db.attachments.get(id),
+  ]);
+  return file
+    ? binaryToBlob(file.blob, attachment?.mime ?? 'application/octet-stream')
+    : null;
 }
 
 export async function deleteAttachment(id: string): Promise<void> {
@@ -551,6 +571,13 @@ export async function saveDayDraft(input: SaveDayDraftInput): Promise<void> {
       throw new ValidationError(`El archivo «${attachment.name}» está vacío.`);
     }
   }
+  const storedAttachmentAdds = await Promise.all(
+    input.attachmentAdds.map(async (attachment) => ({
+      ...attachment,
+        thumb: await blobToArrayBuffer(attachment.thumb as Blob | null),
+      blob: await attachment.blob.arrayBuffer(),
+    })),
+  );
 
   await db.transaction(
     'rw',
@@ -615,7 +642,7 @@ export async function saveDayDraft(input: SaveDayDraftInput): Promise<void> {
         await db.attachmentFiles.delete(id);
       }
 
-      for (const attachment of input.attachmentAdds) {
+      for (const attachment of storedAttachmentAdds) {
         const id = uuid();
         await db.attachments.add({
           id,
@@ -627,17 +654,6 @@ export async function saveDayDraft(input: SaveDayDraftInput): Promise<void> {
           createdAt: now,
         });
         await db.attachmentFiles.add({ id, blob: attachment.blob });
-      }
-
-      const allAttachments = await db.attachments.toArray();
-      const totalSize = allAttachments.reduce(
-        (total, attachment) => total + attachment.size,
-        0,
-      );
-      if (totalSize > MAX_TOTAL_ATTACHMENT_BYTES) {
-        throw new ValidationError(
-          'Se alcanzaría el límite de 100 MB de adjuntos. Borra algún archivo antes de guardar.',
-        );
       }
 
       const [movementCount, attachmentCount] = await Promise.all([

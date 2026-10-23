@@ -152,8 +152,10 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border);
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-2);
 }
 
 .sheet-section .day-section-head {
@@ -173,6 +175,28 @@
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--surface-2);
+}
+
+.movement-templates-empty {
+  padding: 12px 14px 16px;
+  text-align: center;
+}
+
+.movement-templates-card .card-header > div {
+  min-width: 0;
+}
+
+.movement-templates-card .card-header .btn {
+  flex: none;
+  white-space: nowrap;
+}
+
+.movement-templates-empty .empty-text {
+  margin-bottom: 4px;
+}
+
+.movement-template-form {
+  row-gap: 12px;
 }
 
 .movement-draft-head {
@@ -238,6 +262,15 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  border-color: var(--primary-soft);
+}
+
+.day-movements-block {
+  border-color: var(--border-strong);
+}
+
+.day-attachments-block {
+  border-color: var(--success-soft);
 }
 
 .day-section-head {
@@ -260,12 +293,6 @@
 .day-attachments-block .attachment-section-head {
   align-items: flex-start;
   margin-bottom: 10px;
-}
-
-.day-note-block {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
 }
 
 /* Día --------------------------------------------------------------------- */
@@ -408,6 +435,54 @@
 .breakdown-bar {
   flex: 1;
   min-width: 0;
+}
+
+.day-hours-track {
+  display: flex;
+  gap: 1px;
+}
+
+.day-hours-segment {
+  display: block;
+  height: 100%;
+  transition: width 0.35s ease;
+}
+
+.day-hours-segment.target {
+  background: var(--primary);
+}
+
+.day-hours-segment.excess {
+  background: var(--warning);
+}
+
+.day-hours-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 7px;
+  color: var(--text-3);
+  font-size: 0.65rem;
+}
+
+.day-hours-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.day-hours-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+}
+
+.day-hours-swatch.target {
+  background: var(--primary);
+}
+
+.day-hours-swatch.excess {
+  background: var(--warning);
 }
 
 .breakdown-value {
@@ -684,22 +759,16 @@
 .target-input {
   width: 100%;
   height: 40px;
-  padding: 0 2px;
+  padding: 0 3px;
   text-align: center;
   border: 1px solid var(--border-strong);
   border-radius: 9px;
   background: var(--surface);
   color: var(--text);
-  font-size: 0.84rem;
+  font-size: 0.7rem;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
-  appearance: textfield;
-}
-
-.target-input::-webkit-outer-spin-button,
-.target-input::-webkit-inner-spin-button {
-  appearance: none;
-  margin: 0;
+  cursor: pointer;
 }
 
 .target-input:focus {
