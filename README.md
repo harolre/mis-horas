@@ -2,26 +2,27 @@
 
 Aplicación web local para registrar las horas de trabajo, consultar objetivos y extras, guardar adjuntos y exportar copias de seguridad cifradas.
 
-No tiene backend, no sincroniza datos y no envía información a ningún servidor. Los datos de la app se guardan en el almacenamiento del navegador mediante IndexedDB; las plantillas de tramos se guardan localmente en el navegador. La app funciona sin conexión una vez instalada o cargada, y está pensada para usarse como PWA en el móvil, especialmente en iPhone.
+No tiene backend, no sincroniza datos y no envía información a ningún servidor. Los datos de la app se guardan en el almacenamiento del navegador mediante IndexedDB. La app funciona sin conexión una vez instalada o cargada, y está pensada para usarse como PWA en el móvil, especialmente en iPhone.
 
 ## Características
 
 - Vista semanal compacta en **Inicio**, con los siete días y una hoja por día para editar el estado, los tramos, los adjuntos y la nota.
 - Registro de tramos de trabajo por día, con hora de inicio, fin, descanso y cuenta. Los cambios del día se confirman juntos con **Guardar día**.
-- Crea plantillas locales de tramos con cuenta, horario y pausa, y aplícalas al registrar jornadas frecuentes.
+- Tramos de **tiempo de médico**: se registran con su horario y cuentan como horas trabajadas y pagadas.
 - Varias cuentas con color, archivo y totales por cuenta.
 - Objetivo semanal global, con horas distintas para cada día de la semana.
-- Excepciones de objetivo para fechas concretas.
 - Cálculo de horas extra semanales: `max(0, horas de la semana − objetivo de la semana)`.
 - Exceso diario informativo cuando un día supera su objetivo, sin alterar el cálculo semanal del extra.
 - Resumen semanal, mensual y anual, con desglose por cuenta.
-- Calendario mensual con indicadores de horas, ausencias y adjuntos.
-- Estados de día: trabajo, vacaciones, festivo y baja. Vacaciones, festivos y bajas reducen el objetivo diario y se distinguen por color en los resúmenes; no se suman como horas trabajadas.
+- Resumen de vacaciones, asuntos propios, bajas, festivos y tiempo de médico del periodo seleccionado.
+- Exportación del resumen a PDF por semana, mes o año, con detalle diario y marcas de adjuntos.
+- Calendario mensual con resumen del mes, indicadores de horas, ausencias y adjuntos. Al tocar un día se muestra su resumen y se puede editar sin salir del calendario.
+- Estados de día: trabajo, vacaciones, asunto propio, festivo y baja. Vacaciones, asuntos propios, festivos y bajas reducen el objetivo diario y se distinguen por color en los resúmenes; no se suman como horas trabajadas.
 - Notas por día.
 - Adjuntos de imágenes y PDF, con miniaturas y límites de tamaño.
 - Compresión de imágenes y optimización de PDF (sin pérdida cuando es posible, con rasterización como alternativa).
-- Copias de seguridad cifradas con contraseña en formato `.mhbackup`.
-- Tema claro, oscuro o automático.
+- Copias de seguridad cifradas separadas: datos en `.mhdata` y adjuntos por año en `.mhatt`. Se mantiene compatibilidad con las copias antiguas `.mhbackup`.
+- Tema claro, oscuro estilo iOS con fondo negro puro o automático.
 - Funcionamiento offline mediante service worker.
 
 ## Requisitos
@@ -50,6 +51,14 @@ npm run build
 ```
 
 `npm run build` ejecuta primero la comprobación de tipos de TypeScript.
+
+Las pruebas de interfaz usan Playwright y el Edge instalado en Windows:
+
+```bash
+npm run test:e2e
+```
+
+Cubren el registro de tiempo de médico, las vacaciones, la tarjeta del día en el calendario, la preparación del PDF y la exportación de datos. En otros sistemas hay que indicar un navegador con `PLAYWRIGHT_CHANNEL` o instalar Chromium con `npx playwright install chromium`.
 
 Para probar la compilación de producción en local:
 
@@ -107,7 +116,7 @@ La instalación y el service worker requieren HTTPS; GitHub Pages lo proporciona
 
 Los datos viven únicamente en el navegador y en el perfil desde el que se usa la app:
 
-- IndexedDB guarda cuentas, tramos, días, ajustes, metadatos de adjuntos y los archivos completos.
+- IndexedDB guarda cuentas, tramos, días, ajustes, metadatos de adjuntos y los archivos completos. Los adjuntos restaurados solo como datos quedan marcados como archivados y no ocupan el espacio del archivo.
 - Borrar los datos del sitio, desinstalar la app o limpiar el almacenamiento del navegador elimina todo.
 - iOS puede liberar almacenamiento del sitio si el dispositivo tiene poco espacio. Por eso conviene exportar copias con frecuencia.
 - Safari y la app instalada pueden usar almacenes distintos. Usa siempre el mismo contexto (preferiblemente la app instalada) y exporta las copias desde ahí.
@@ -115,19 +124,23 @@ Los datos viven únicamente en el navegador y en el perfil desde el que se usa l
 
 ### Exportar e importar
 
-En **Ajustes → Copias de seguridad**:
+En **Ajustes → Copias de seguridad** hay dos exportaciones independientes:
 
-- **Exportar copia cifrada** genera un archivo `.mhbackup`.
-- La copia se cifra con una contraseña elegida por ti.
-- **Importar copia cifrada** reemplaza todos los datos actuales por los de la copia. No fusiona.
-- La contraseña no se guarda en ningún sitio. Si se pierde, la copia no se puede recuperar.
+- **Exportar datos** genera un archivo `.mhdata` con horas, días, cuentas, ajustes y la lista de fotos. No incluye las fotos y suele pesar muy poco.
+- **Exportar adjuntos de un año** genera un archivo `.mhatt` con las fotos comprimidas de ese año. Se pueden guardar varios años por separado.
+- Tras crear una copia, se puede **descargar** o **compartir**. En iPhone, el menú de compartir permite guardarla en **iCloud Drive**, **Google Drive** o **Files**.
+- **Restaurar copia** detecta automáticamente si el archivo es de datos, de adjuntos o una copia completa antigua `.mhbackup`.
+- Al restaurar datos, se conservan las fotos que ya existan con el mismo identificador. Las que falten quedan **archivadas** hasta restaurar su archivo de adjuntos.
+- Al restaurar un archivo de adjuntos, las fotos se escriben una a una y se verifica su integridad. Se puede cancelar sin perder las ya restauradas.
+- Las copias antiguas `.mhbackup` siguen siendo compatibles, pero se restauran completas y pueden consumir mucha memoria si son grandes.
 
 Formato de seguridad de las copias:
 
 - Contraseña derivada con PBKDF2-SHA-256 y 600.000 iteraciones.
 - Cifrado AES-256-GCM por bloques de 4 MB, con IV único y datos autenticados adicionales.
-- Cabecera `MHBK1` y metadatos necesarios para reconstruir la base de datos.
-- Una contraseña incorrecta o un archivo alterado se detectan al importar.
+- Las copias nuevas usan la cabecera `MHBK2`; las antiguas usan `MHBK1`.
+- Una contraseña incorrecta o un archivo alterado se detectan al restaurar.
+- La contraseña no se guarda en ningún sitio. Si se pierde, la copia no se puede recuperar.
 
 ## Adjuntos
 
@@ -141,15 +154,25 @@ Formato de seguridad de las copias:
 
 Los adjuntos pertenecen al día, no a un tramo concreto. Se añaden desde la hoja del día en **Inicio** y se pueden previsualizar, descargar, compartir y eliminar allí mismo. Las altas y bajas de adjuntos quedan pendientes hasta pulsar **Guardar día**; si se cancela la hoja, se descartan. Si recargas o cierras la app antes de guardar, los adjuntos pendientes se pierden.
 
+## Informes PDF
+
+En **Resumen**, el botón **PDF** permite elegir semana, mes o año. La semana parte de la que está seleccionada y se puede cambiar con las flechas; el mes y el año también se eligen con flechas.
+
+- Semana y mes: detalle diario, totales por cuenta, ausencias y tiempo de médico.
+- Año: resumen mes a mes.
+- El clip indica que ese día tiene adjuntos; las fotos no se incluyen en el PDF.
+- El archivo se genera en el dispositivo y se comparte o descarga desde el menú del sistema.
+
 ## Cálculos
 
 - Los tramos se guardan en minutos y pueden cruzar la medianoche.
-- El objetivo diario se toma de las horas configuradas para ese día de la semana o de una excepción de fecha.
-- El objetivo semanal y mensual suma los objetivos diarios ajustados: los días marcados como vacaciones, festivo o baja no tienen objetivo que cumplir.
+- Los tramos de médico suman como horas trabajadas y pagadas; se identifican con la etiqueta «Médico».
+- El objetivo diario se toma de las horas configuradas para ese día de la semana.
+- El objetivo semanal y mensual suma los objetivos diarios ajustados: los días marcados como vacaciones, asunto propio, festivo o baja no tienen objetivo que cumplir.
 - Las horas extra de una semana son las horas trabajadas que superan el objetivo semanal, nunca negativas.
 - El exceso de un día sobre su objetivo se muestra como información en **Inicio**, pero no se suma como extra si la semana no supera su objetivo global.
 - Los periodos mensual y anual usan sus fechas naturales completas. En los resúmenes, las semanas que cruzan el límite del periodo solo cuentan los días incluidos en ese periodo.
-- Las horas justificadas de vacaciones, festivos y bajas se representan por separado mediante colores, pero no se cuentan como trabajadas ni como extras.
+- Las horas justificadas de vacaciones, asuntos propios, festivos y bajas se representan por separado mediante colores, pero no se cuentan como trabajadas ni como extras.
 
 ## Estructura del proyecto
 

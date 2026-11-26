@@ -29,6 +29,16 @@ export function AttachmentPreviewModal({
     setUrl(null);
     setPreviewBlob(null);
 
+    if (attachment.archived) {
+      setLoading(false);
+      setError(
+        'Esta foto está archivada. Restaura el archivo de adjuntos del año correspondiente para verla.',
+      );
+      return () => {
+        active = false;
+      };
+    }
+
     if (blob) {
       objectUrl = URL.createObjectURL(blob);
       setPreviewBlob(blob);
@@ -62,7 +72,7 @@ export function AttachmentPreviewModal({
       active = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [attachment.id, blob]);
+  }, [attachment.id, attachment.archived, blob]);
 
   async function shareOrDownload() {
     if (!previewBlob) return;

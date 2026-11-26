@@ -1,4 +1,9 @@
-import type { Attachment, ISODate, Movement } from '../../types';
+import type {
+  Attachment,
+  ISODate,
+  Movement,
+  MovementCategory,
+} from '../../types';
 import type { PreparedAttachment } from '../../attachments/process';
 import type { DayMovementDraft } from '../../db/repos';
 import { durationMinutes } from '../../domain/time';
@@ -12,6 +17,7 @@ export interface DraftMovement {
   endMin: number;
   breakMin: number;
   crossesMidnight: boolean;
+  category: MovementCategory;
   note?: string;
 }
 
@@ -30,6 +36,7 @@ export function movementToDraft(movement: Movement): DraftMovement {
     endMin: movement.endMin,
     breakMin: movement.breakMin,
     crossesMidnight: movement.crossesMidnight === 1,
+    category: movement.category ?? 'work',
     note: movement.note,
   };
 }
@@ -42,6 +49,7 @@ export function draftToInput(movement: DraftMovement): DayMovementDraft {
     endMin: movement.endMin,
     breakMin: movement.breakMin,
     crossesMidnight: movement.crossesMidnight,
+    category: movement.category,
     note: movement.note,
   };
 }

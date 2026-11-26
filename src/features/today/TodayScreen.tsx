@@ -11,7 +11,7 @@ import {
   addDays,
   formatShortDate,
   formatWeekdayLong,
-  formatWeekTitle,
+  formatWeekRangeShort,
   startOfWeek,
   todayISO,
 } from '../../domain/date';
@@ -21,7 +21,6 @@ import { ScreenHeader } from '../../components/ScreenHeader';
 import { Icon } from '../../components/Icon';
 import { ProgressBar } from '../../components/ProgressBar';
 import { DayEditorSheet } from './DayEditorSheet';
-import { MovementTemplatesSection } from './MovementTemplatesSection';
 import { kindInfo } from './dayKinds';
 
 interface TodayScreenProps {
@@ -125,7 +124,7 @@ export function TodayScreen({
 
       <ScreenHeader
         title="Inicio"
-        subtitle={formatWeekTitle(weekStart, weekEnd)}
+        subtitle={formatWeekRangeShort(weekStart, weekEnd)}
         actions={
           <>
             {!isToday ? (
@@ -293,8 +292,6 @@ export function TodayScreen({
           );
         })}
       </section>
-
-      <MovementTemplatesSection accounts={accounts ?? []} />
 
       {editingDate ? (
         <DayEditorSheet

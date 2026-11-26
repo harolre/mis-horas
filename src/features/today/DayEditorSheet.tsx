@@ -67,6 +67,7 @@ function sameDraftMovement(a: DraftMovement, b: DraftMovement): boolean {
     a.endMin === b.endMin &&
     a.breakMin === b.breakMin &&
     a.crossesMidnight === b.crossesMidnight &&
+    a.category === b.category &&
     (a.note ?? '') === (b.note ?? '')
   );
 }
@@ -394,39 +395,76 @@ export function DayEditorSheet({
 
   return (
     <Modal
-      title={formatLongDate(date)}
-      subtitle="Horas y adjuntos"
+      title={
+        editor
+          ? editor.movement
+            ? 'Editar tramo'
+            : 'Nuevo tramo'
+          : formatLongDate(date)
+      }
+      subtitle={
+        editor
+          ? `${formatLongDate(date)} · Borrador`
+          : 'Horas y adjuntos'
+      }
       onClose={requestClose}
-      dismissible={!saving}
+      dismissible={!saving && !editor}
       footer={
-        <>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={requestClose}
-            disabled={saving}
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => {
-              if (dirty) void handleSave();
-              else requestClose();
-            }}
-            disabled={saving || Boolean(processing) || Boolean(editor)}
-          >
-            {saving ? (
-              <span className="spinner on-primary" />
-            ) : (
-              <Icon name={dirty ? 'save' : 'check'} size={17} />
-            )}
-            {saving ? 'Guardando…' : dirty ? 'Guardar día' : 'Cerrar'}
-          </button>
-        </>
+        editor ? undefined : (
+          <>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={requestClose}
+              disabled={saving}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                if (dirty) void handleSave();
+                else requestClose();
+              }}
+              disabled={saving || Boolean(processing)}
+            >
+              {saving ? (
+                <span className="spinner on-primary" />
+              ) : (
+                <Icon name={dirty ? 'save' : 'check'} size={17} />
+              )}
+              {saving ? 'Guardando…' : dirty ? 'Guardar día' : 'Cerrar'}
+            </button>
+          </>
+        )
       }
     >
+      {editor ? (
+        <div className="movement-focus">
+          <div className="movement-focus-head">
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={closeEditor}
+            >
+              <Icon name="chevron-left" size={16} />
+              Volver al día
+            </button>
+          </div>
+          <MovementDraftForm
+            key={editor.movement?.key ?? 'new'}
+            accounts={accounts}
+            movements={movements}
+            editing={editor.movement}
+            showHeader={false}
+            onSubmit={submitDraftMovement}
+            onCancel={closeEditor}
+            onDirtyChange={setFormDirty}
+          />
+        </div>
+      ) : (
+        <>
       <div className="sheet-summary" aria-label="Resumen del día">
         <div className="sheet-summary-item">
           <span>Trabajado</span>
@@ -465,8 +503,8 @@ export function DayEditorSheet({
         <div className="banner warning">
           <Icon name="info" size={16} />
           <span>
-            Día marcado como <strong>{info.label.toLowerCase()}</strong>. Es
-            informativo: no altera los totales y no admite tramos de trabajo.
+            Día marcado como <strong>{info.label.toLowerCase()}</strong>. No
+            admite tramos y reduce el objetivo de ese día.
           </span>
         </div>
       ) : null}
@@ -556,6 +594,9 @@ export function DayEditorSheet({
                       </span>
                       <span className="movement-account">
                         {account?.name ?? 'Cuenta eliminada'}
+                        {movement.category === 'medical' ? (
+                          <span className="badge medical">Médico</span>
+                        ) : null}
                       </span>
                       {movement.note ? (
                         <span className="movement-note">{movement.note}</span>
@@ -597,17 +638,6 @@ export function DayEditorSheet({
           </p>
         ) : null}
 
-        {editor ? (
-          <MovementDraftForm
-            key={editor.movement?.key ?? 'new'}
-            accounts={accounts}
-            movements={movements}
-            editing={editor.movement}
-            onSubmit={submitDraftMovement}
-            onCancel={closeEditor}
-            onDirtyChange={setFormDirty}
-          />
-        ) : null}
       </div>
 
       <div className="sheet-section day-attachments-block">
@@ -687,6 +717,8 @@ export function DayEditorSheet({
                   </button>
                   {marked ? (
                     <span className="attach-badge danger">Se eliminará</span>
+                  ) : attachment.archived ? (
+                    <span className="attach-badge">Archivada</span>
                   ) : null}
                   <button
                     type="button"
@@ -762,16 +794,13 @@ export function DayEditorSheet({
         </button>
       ) : null}
 
-      {editor ? (
-        <p className="field-hint sheet-save-hint">
-          Termina o cancela el tramo para poder guardar el día.
-        </p>
-      ) : null}
       {processing ? (
         <p className="field-hint sheet-save-hint">
           Espera a que termine el adjunto o cancélalo para guardar el día.
         </p>
       ) : null}
+        </>
+      )}
 
       {preview ? (
         <AttachmentPreviewModal

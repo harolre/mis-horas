@@ -3,10 +3,12 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import type { ThemeMode, Weekday } from '../../types';
 import {
   attachmentStats,
+  attachmentYears,
   eraseAllData,
   getSettings,
   saveSettings,
   weekdayLabel,
+  type AttachmentYear,
 } from '../../db/repos';
 import {
   formatDuration,
@@ -14,7 +16,7 @@ import {
   hoursToMinutes,
   minutesToHoursInput,
 } from '../../domain/time';
-import { formatShortDate, todayISO } from '../../domain/date';
+import { todayISO } from '../../domain/date';
 import { APP_VERSION } from '../../version';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { Icon } from '../../components/Icon';
@@ -63,7 +65,12 @@ export function SettingsScreen({
   const stats = useLiveQuery(
     () => attachmentStats(),
     [],
-    { count: 0, totalSize: 0 },
+    { count: 0, totalSize: 0, archivedCount: 0 },
+  );
+  const attachmentYearList = useLiveQuery(
+    () => attachmentYears(),
+    [],
+    [] as AttachmentYear[],
   );
   const [targets, setTargets] = useState<string[]>([
     '8',
@@ -75,13 +82,13 @@ export function SettingsScreen({
     '0',
   ]);
   const [targetsDirty, setTargetsDirty] = useState(false);
-  const [overrideDate, setOverrideDate] = useState(todayISO());
-  const [overrideHours, setOverrideHours] = useState('0');
   const [storage, setStorage] = useState<{ usage: number; quota: number } | null>(
     null,
   );
   const [lastBackup, setLastBackup] = useState<string | null>(null);
-  const [exportOpen, setExportOpen] = useState(false);
+  const [exportDataOpen, setExportDataOpen] = useState(false);
+  const [exportAttachmentsOpen, setExportAttachmentsOpen] = useState(false);
+  const [exportYear, setExportYear] = useState(todayISO().slice(0, 4));
   const [importOpen, setImportOpen] = useState(false);
   const [eraseOpen, setEraseOpen] = useState(false);
   const [eraseConfirmed, setEraseConfirmed] = useState(false);
@@ -102,6 +109,15 @@ export function SettingsScreen({
     void refreshStorage();
   }, []);
 
+  useEffect(() => {
+    if (
+      attachmentYearList.length > 0 &&
+      !attachmentYearList.some((item) => item.year === exportYear)
+    ) {
+      setExportYear(attachmentYearList[0].year);
+    }
+  }, [attachmentYearList, exportYear]);
+
   async function refreshStorage() {
     try {
       const estimate = await navigator.storage?.estimate?.();
@@ -120,12 +136,6 @@ export function SettingsScreen({
     (total, value) => total + (hoursToMinutes(value) ?? 0),
     0,
   );
-  const overrides = settings
-    ? Object.entries(settings.dateOverrides).sort(([a], [b]) =>
-        a.localeCompare(b),
-      )
-    : [];
-
   function updateTarget(index: number, value: string) {
     setTargetsDirty(true);
     setTargets((current) =>
@@ -152,42 +162,6 @@ export function SettingsScreen({
     try {
       await saveSettings({ weekStart: Number(value) as Weekday });
       toast('Inicio de semana actualizado.', 'success');
-    } catch (error) {
-      toast((error as Error).message, 'error');
-    }
-  }
-
-  async function addOverride() {
-    if (!settings) return;
-    const minutes = hoursToMinutes(overrideHours);
-    if (!overrideDate) {
-      toast('Elige una fecha para la excepción.', 'error');
-      return;
-    }
-    if (minutes === null) {
-      toast('Introduce horas válidas para la excepción.', 'error');
-      return;
-    }
-    try {
-      await saveSettings({
-        dateOverrides: {
-          ...settings.dateOverrides,
-          [overrideDate]: minutes,
-        },
-      });
-      toast('Excepción guardada.', 'success');
-    } catch (error) {
-      toast((error as Error).message, 'error');
-    }
-  }
-
-  async function removeOverride(date: string) {
-    if (!settings) return;
-    const next = { ...settings.dateOverrides };
-    delete next[date];
-    try {
-      await saveSettings({ dateOverrides: next });
-      toast('Excepción eliminada.', 'success');
     } catch (error) {
       toast((error as Error).message, 'error');
     }
@@ -224,6 +198,18 @@ export function SettingsScreen({
   const estimatedAvailable = storage && storage.quota > 0
     ? Math.max(0, storage.quota - storage.usage)
     : null;
+  const selectedYearStats = attachmentYearList.find(
+    (item) => item.year === exportYear,
+  );
+  const averageAttachmentSize =
+    stats.count - stats.archivedCount > 0
+      ? stats.totalSize / (stats.count - stats.archivedCount)
+      : 0;
+  const lastBackupTime = lastBackup ? Date.parse(lastBackup) : Number.NaN;
+  const backupOverdue =
+    !lastBackup ||
+    !Number.isFinite(lastBackupTime) ||
+    Date.now() - lastBackupTime > 30 * 24 * 60 * 60 * 1000;
 
   return (
     <div className="screen">
@@ -337,89 +323,6 @@ export function SettingsScreen({
             </div>
           </div>
 
-          <div className="settings-row column" style={{ gap: 10 }}>
-            <div>
-              <div className="settings-title">Excepciones por fecha</div>
-              <div className="settings-desc">
-                Sustituyen el objetivo de un día concreto, por ejemplo el 24 de
-                diciembre.
-              </div>
-            </div>
-            <form
-              className="form-grid"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void addOverride();
-              }}
-            >
-              <div className="field">
-                <label className="field-label" htmlFor="override-date">
-                  Fecha
-                </label>
-                <input
-                  id="override-date"
-                  className="input"
-                  type="date"
-                  value={overrideDate}
-                  onChange={(event) => setOverrideDate(event.target.value)}
-                  disabled={!settings}
-                />
-              </div>
-              <div className="field">
-                <label className="field-label" htmlFor="override-hours">
-                  Horas
-                </label>
-                <input
-                  id="override-hours"
-                  className="input"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  max={24}
-                  step={0.25}
-                  value={overrideHours}
-                  onChange={(event) => setOverrideHours(event.target.value)}
-                  disabled={!settings}
-                />
-              </div>
-              <button
-                type="submit"
-                className="btn btn-secondary full"
-                disabled={!settings}
-              >
-                <Icon name="plus" size={16} />
-                Añadir excepción
-              </button>
-            </form>
-            {overrides.length === 0 ? (
-              <p className="field-hint">
-                No hay excepciones. Se usan los objetivos semanales.
-              </p>
-            ) : (
-              <div className="list">
-                {overrides.map(([date, minutes]) => (
-                  <div className="override-row" key={date}>
-                    <span className="override-date">
-                      {formatShortDate(date)}
-                    </span>
-                    <span className="override-hours">
-                      {formatDuration(minutes)}
-                    </span>
-                    <button
-                      type="button"
-                      className="icon-button plain text-danger"
-                      onClick={() => void removeOverride(date)}
-                      aria-label={`Eliminar excepción del ${formatShortDate(
-                        date,
-                      )}`}
-                    >
-                      <Icon name="trash" size={16} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
       </section>
 
@@ -432,6 +335,21 @@ export function SettingsScreen({
               <div className="settings-desc">
                 {stats.count} {stats.count === 1 ? 'archivo' : 'archivos'} ·{' '}
                 {formatFileSize(stats.totalSize)}
+                {stats.archivedCount > 0
+                  ? ` · ${stats.archivedCount} archivado${
+                      stats.archivedCount === 1 ? '' : 's'
+                    }`
+                  : ''}
+              </div>
+            </div>
+          </div>
+          <div className="settings-row">
+            <div>
+              <div className="settings-title">Media por adjunto</div>
+              <div className="settings-desc">
+                {averageAttachmentSize > 0
+                  ? formatFileSize(Math.round(averageAttachmentSize))
+                  : 'Sin adjuntos todavía'}
               </div>
             </div>
           </div>
@@ -454,48 +372,112 @@ export function SettingsScreen({
           <div className="settings-row column" style={{ gap: 10 }}>
             <div className="row-between">
               <div>
-                <div className="settings-title">Copia cifrada</div>
+                <div className="settings-title">Copia de datos</div>
                 <div className="settings-desc">
-                  Incluye todos los datos y los adjuntos comprimidos. Se cifra
-                  con AES-256-GCM.
+                  Horas, días, cuentas, ajustes y la lista de fotos. No incluye
+                  las fotos, así que es pequeña y rápida.
                 </div>
               </div>
               <Icon name="lock" size={20} />
             </div>
-            <div className="row-between tiny muted">
-              <span>
-                {stats.count} adjunto{stats.count === 1 ? '' : 's'} ·{' '}
-                {formatFileSize(stats.totalSize)}
-              </span>
-              <span>Última: {formatLastBackup(lastBackup)}</span>
-            </div>
-            <div className="stack-sm">
-              <button
-                type="button"
-                className="btn btn-primary btn-block"
-                onClick={() => setExportOpen(true)}
-              >
-                <Icon name="download" size={17} />
-                Exportar copia cifrada
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary btn-block"
-                onClick={() => setImportOpen(true)}
-              >
-                <Icon name="upload" size={17} />
-                Importar copia cifrada
-              </button>
-            </div>
+            <button
+              type="button"
+              className="btn btn-primary btn-block"
+              onClick={() => setExportDataOpen(true)}
+            >
+              <Icon name="download" size={17} />
+              Exportar datos
+            </button>
           </div>
-        </div>
-        <div className="banner warning">
-          <Icon name="alert" size={16} />
-          <span>
-            La contraseña no se guarda en ningún sitio. Sin ella, la copia no se
-            puede recuperar. Importar una copia reemplaza todos los datos
-            actuales.
-          </span>
+
+          <div className="settings-row column" style={{ gap: 10 }}>
+            <div>
+              <div className="settings-title">Copia de adjuntos</div>
+              <div className="settings-desc">
+                Fotos comprimidas de un año. Se guardan y restauran por
+                separado, sin cargar todos los años a la vez.
+              </div>
+            </div>
+            {attachmentYearList.length > 0 ? (
+              <>
+                <div className="row-between" style={{ gap: 10 }}>
+                  <select
+                    className="select"
+                    value={exportYear}
+                    onChange={(event) => setExportYear(event.target.value)}
+                    aria-label="Año de los adjuntos"
+                  >
+                    {attachmentYearList.map((item) => (
+                      <option key={item.year} value={item.year}>
+                        {item.year} · {item.availableCount} disponible
+                        {item.availableCount === 1 ? '' : 's'}
+                        {item.archivedCount > 0
+                          ? ` · ${item.archivedCount} archivado${
+                              item.archivedCount === 1 ? '' : 's'
+                            }`
+                          : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="tiny muted">
+                    {selectedYearStats
+                      ? formatFileSize(selectedYearStats.totalSize)
+                      : ''}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-block"
+                  onClick={() => setExportAttachmentsOpen(true)}
+                  disabled={(selectedYearStats?.availableCount ?? 0) === 0}
+                >
+                  <Icon name="download" size={17} />
+                  Exportar adjuntos de {exportYear}
+                </button>
+                {selectedYearStats &&
+                selectedYearStats.availableCount === 0 ? (
+                  <p className="field-hint">
+                    Las fotos de este año están archivadas. Restaura primero su
+                    archivo de adjuntos.
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p className="field-hint">Todavía no hay fotos para exportar.</p>
+            )}
+          </div>
+
+          <div className="settings-row column" style={{ gap: 10 }}>
+            <div>
+              <div className="settings-title">Restaurar copia</div>
+              <div className="settings-desc">
+                Restaura los datos, las fotos de un año o una copia completa
+                antigua. La app detecta el tipo de archivo.
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-secondary btn-block"
+              onClick={() => setImportOpen(true)}
+            >
+              <Icon name="upload" size={17} />
+              Elegir archivo de copia
+            </button>
+            <div className="tiny muted">
+              Última exportación: {formatLastBackup(lastBackup)}
+            </div>
+            <p className="field-hint">
+              La contraseña no se guarda. Sin ella, la copia no se puede
+              recuperar.
+            </p>
+            {backupOverdue ? (
+              <p className="field-hint">
+                {lastBackup
+                  ? 'Han pasado más de 30 días desde la última exportación.'
+                  : 'Todavía no has exportado ninguna copia.'}
+              </p>
+            ) : null}
+          </div>
         </div>
       </section>
 
@@ -533,11 +515,23 @@ export function SettingsScreen({
         sincronización.
       </p>
 
-      {exportOpen ? (
+      {exportDataOpen ? (
         <ExportBackupModal
+          mode="data"
           attachmentCount={stats.count}
           attachmentSize={stats.totalSize}
-          onClose={() => setExportOpen(false)}
+          onClose={() => setExportDataOpen(false)}
+          onExported={markExported}
+        />
+      ) : null}
+
+      {exportAttachmentsOpen ? (
+        <ExportBackupModal
+          mode="attachments"
+          year={exportYear}
+          attachmentCount={selectedYearStats?.count ?? 0}
+          attachmentSize={selectedYearStats?.totalSize ?? 0}
+          onClose={() => setExportAttachmentsOpen(false)}
           onExported={markExported}
         />
       ) : null}

@@ -38,7 +38,7 @@ export type ExcusedHours = Record<Exclude<DayKind, 'work'>, number>;
 export type ExtraCalculation = 'weekly' | 'period';
 
 function emptyExcusedHours(): ExcusedHours {
-  return { vacation: 0, holiday: 0, sick: 0 };
+  return { vacation: 0, personal: 0, holiday: 0, sick: 0 };
 }
 
 function dayForDate(date: ISODate, days: readonly DayEntry[]): DayEntry | undefined {

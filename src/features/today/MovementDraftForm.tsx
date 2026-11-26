@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Account } from '../../types';
+import type { Account, MovementCategory } from '../../types';
 import {
   formatDuration,
   formatTime,
@@ -7,13 +7,19 @@ import {
   parseTime,
 } from '../../domain/time';
 import { Icon } from '../../components/Icon';
+import { Segmented } from '../../components/Segmented';
 import type { DraftMovement } from './dayDraft';
-import { loadMovementTemplates } from './movementTemplates';
+
+const CATEGORY_OPTIONS = [
+  { value: 'work', label: 'Trabajo' },
+  { value: 'medical', label: 'Médico' },
+];
 
 interface MovementDraftFormProps {
   accounts: Account[];
   movements: DraftMovement[];
   editing?: DraftMovement | null;
+  showHeader?: boolean;
   onSubmit: (movement: DraftMovement) => void;
   onCancel: () => void;
   onDirtyChange?: (dirty: boolean) => void;
@@ -31,6 +37,7 @@ export function MovementDraftForm({
   accounts,
   movements,
   editing,
+  showHeader = true,
   onSubmit,
   onCancel,
   onDirtyChange,
@@ -49,6 +56,7 @@ export function MovementDraftForm({
   const initialEnd = editing ? formatTime(editing.endMin) : '17:00';
   const initialBreak = String(editing?.breakMin ?? 0);
   const initialCrossesMidnight = editing?.crossesMidnight ?? false;
+  const initialCategory: MovementCategory = editing?.category ?? 'work';
   const initialNote = editing?.note ?? '';
 
   const [accountId, setAccountId] = useState(initialAccount);
@@ -58,16 +66,16 @@ export function MovementDraftForm({
   const [crossesMidnight, setCrossesMidnight] = useState(
     initialCrossesMidnight,
   );
+  const [category, setCategory] = useState<MovementCategory>(initialCategory);
   const [note, setNote] = useState(initialNote);
   const [error, setError] = useState('');
-  const [templates] = useState(loadMovementTemplates);
-  const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const formDirty =
     accountId !== initialAccount ||
     start !== initialStart ||
     end !== initialEnd ||
     breakMin !== initialBreak ||
     crossesMidnight !== initialCrossesMidnight ||
+    category !== initialCategory ||
     note !== initialNote;
 
   const startMin = parseTime(start);
@@ -147,56 +155,36 @@ export function MovementDraftForm({
       endMin,
       breakMin: breakValue,
       crossesMidnight,
+      category,
       note: note.trim() || undefined,
     });
   }
 
-  function applyTemplate(id: string) {
-    setSelectedTemplateId(id);
-    const template = templates.find((item) => item.id === id);
-    if (!template) return;
-    const accountIsUsable = usableAccounts.some(
-      (account) => account.id === template.accountId,
-    );
-    setAccountId(
-      accountIsUsable ? template.accountId : usableAccounts[0]?.id ?? '',
-    );
-    setStart(formatTime(template.startMin));
-    setEnd(formatTime(template.endMin));
-    setBreakMin(String(template.breakMin));
-    setCrossesMidnight(template.crossesMidnight);
-    setError('');
-  }
-
   return (
     <div className="movement-draft-form" ref={formRef}>
-      <div className="movement-draft-head">
-        <div className="card-title">
-          {editing ? 'Editar tramo' : 'Nuevo tramo'}
+      {showHeader ? (
+        <div className="movement-draft-head">
+          <div className="card-title">
+            {editing ? 'Editar tramo' : 'Nuevo tramo'}
+          </div>
+          <span className="badge">Borrador</span>
         </div>
-        <span className="badge">Borrador</span>
-      </div>
+      ) : null}
 
       <div className="field">
-        <label className="field-label" htmlFor="movement-template-select">
-          Aplicar plantilla
-        </label>
-        <select
-          id="movement-template-select"
-          className="select"
-          value={selectedTemplateId}
-          disabled={templates.length === 0}
-          onChange={(event) => applyTemplate(event.target.value)}
-        >
-          <option value="">
-            {templates.length === 0 ? 'No hay plantillas' : 'Elegir plantilla…'}
-          </option>
-          {templates.map((template) => (
-            <option key={template.id} value={template.id}>
-              {template.name}
-            </option>
-          ))}
-        </select>
+        <span className="field-label">Tipo de tiempo</span>
+        <Segmented
+          value={category}
+          options={CATEGORY_OPTIONS}
+          onChange={(value) => setCategory(value as MovementCategory)}
+          label="Tipo de tramo"
+        />
+        {category === 'medical' ? (
+          <p className="field-hint">
+            Las horas de médico cuentan como trabajadas y pagadas. No las
+            dupliques en un tramo de trabajo.
+          </p>
+        ) : null}
       </div>
 
       <div className="field">
@@ -325,7 +313,7 @@ export function MovementDraftForm({
           disabled={usableAccounts.length === 0}
         >
           <Icon name={editing ? 'check' : 'plus'} size={16} />
-          {editing ? 'Actualizar tramo' : 'Añadir tramo'}
+          {editing ? 'Guardar' : 'Añadir'}
         </button>
       </div>
       <p className="field-hint">

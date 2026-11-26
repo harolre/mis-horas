@@ -53,6 +53,22 @@ describe('repositorio', () => {
     expect(day?.kind).toBe('work');
   });
 
+  it('guarda el tiempo de médico como un tramo más', async () => {
+    const movement = await addMovement({
+      accountId: account.id,
+      date: '2026-10-21',
+      startMin: 480,
+      endMin: 600,
+      breakMin: 0,
+      crossesMidnight: false,
+      category: 'medical',
+    });
+    expect(movement.category).toBe('medical');
+    expect((await listMovementsByDate('2026-10-21'))[0].category).toBe(
+      'medical',
+    );
+  });
+
   it('impide registrar horas en una ausencia', async () => {
     await setDayKind('2026-10-21', 'vacation');
     await expect(

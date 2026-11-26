@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import type { Account, DayEntry, ISODate, Movement } from '../../types';
+import type {
+  Account,
+  DayEntry,
+  DayKind,
+  ISODate,
+  Movement,
+} from '../../types';
 import {
   getSettings,
   listAccounts,
@@ -17,7 +23,7 @@ import {
   formatMonthYear,
   formatShortDate,
   formatWeekday,
-  formatWeekTitle,
+  formatWeekRangeShort,
   parseISO,
   startOfMonth,
   startOfWeek,
@@ -25,6 +31,7 @@ import {
   todayISO,
 } from '../../domain/date';
 import {
+  durationMinutes,
   formatCompactDuration,
   formatDuration,
 } from '../../domain/time';
@@ -38,6 +45,7 @@ import { ScreenHeader } from '../../components/ScreenHeader';
 import { Icon } from '../../components/Icon';
 import { ProgressBar } from '../../components/ProgressBar';
 import { Segmented } from '../../components/Segmented';
+import { ExportPdfModal } from './ExportPdfModal';
 
 type Period = 'week' | 'month' | 'year';
 
@@ -49,17 +57,34 @@ const PERIOD_OPTIONS = [
 
 const EXCUSED_KINDS = [
   { kind: 'vacation', label: 'Vacaciones' },
+  { kind: 'personal', label: 'Asunto propio' },
   { kind: 'sick', label: 'Baja' },
   { kind: 'holiday', label: 'Festivo' },
 ] as const;
 
-interface SummaryScreenProps {
-  initialDate: string;
+const EXCUSED_LABELS: Record<string, string> = {
+  vacation: 'vacaciones',
+  personal: 'asunto propio',
+  sick: 'baja',
+  holiday: 'festivo',
+};
+
+function formatDayCount(count: number): string {
+  return `${count} ${count === 1 ? 'día' : 'días'}`;
 }
 
-export function SummaryScreen({ initialDate }: SummaryScreenProps) {
-  const [period, setPeriod] = useState<Period>('week');
+interface SummaryScreenProps {
+  initialDate: string;
+  initialPeriod?: Period;
+}
+
+export function SummaryScreen({
+  initialDate,
+  initialPeriod = 'week',
+}: SummaryScreenProps) {
+  const [period, setPeriod] = useState<Period>(initialPeriod);
   const [anchor, setAnchor] = useState(initialDate || todayISO());
+  const [exportOpen, setExportOpen] = useState(false);
 
   const settings = useLiveQuery(() => getSettings(), [], undefined);
   const accounts = useLiveQuery(
@@ -111,10 +136,31 @@ export function SummaryScreen({ initialDate }: SummaryScreenProps) {
     (movement) => movement.date >= from && movement.date <= to,
   );
   const registeredDays = new Set(inPeriod.map((movement) => movement.date)).size;
+  const leaveDays: Record<Exclude<DayKind, 'work'>, number> = {
+    vacation: 0,
+    personal: 0,
+    sick: 0,
+    holiday: 0,
+  };
+  for (const day of days) {
+    if (day.date < from || day.date > to || day.kind === 'work') continue;
+    leaveDays[day.kind] += 1;
+  }
+  const medicalMinutes = inPeriod
+    .filter((movement) => movement.category === 'medical')
+    .reduce((total, movement) => total + durationMinutes(movement), 0);
+  const hasAbsences =
+    medicalMinutes > 0 || Object.values(leaveDays).some((count) => count > 0);
+  const periodLabel =
+    period === 'week'
+      ? 'En esta semana'
+      : period === 'month'
+        ? 'En este mes'
+        : 'En este año';
 
   const title =
     period === 'week'
-      ? formatWeekTitle(from, to)
+      ? formatWeekRangeShort(from, to)
       : period === 'month'
         ? formatMonthYear(anchor)
         : String(parseISO(anchor).getFullYear());
@@ -168,13 +214,23 @@ export function SummaryScreen({ initialDate }: SummaryScreenProps) {
         title="Resumen"
         subtitle="Horas, objetivos y extras"
         actions={
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => setAnchor(todayISO())}
-          >
-            Hoy
-          </button>
+          <>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => setExportOpen(true)}
+            >
+              <Icon name="download" size={15} />
+              PDF
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => setAnchor(todayISO())}
+            >
+              Hoy
+            </button>
+          </>
         }
       />
 
@@ -347,7 +403,7 @@ export function SummaryScreen({ initialDate }: SummaryScreenProps) {
                         className="progress day-hours-track"
                         style={{ height: 8, width: `${dayTargetTrackWidth}%` }}
                         role="img"
-                         aria-label={`${formatDuration(day.worked)} trabajadas; objetivo ajustado ${formatDuration(day.target)}${day.excused ? `; ${formatDuration(day.excused)} de ${day.kind === 'vacation' ? 'vacaciones' : day.kind === 'sick' ? 'baja' : 'festivo'}` : ''}`}
+                         aria-label={`${formatDuration(day.worked)} trabajadas; objetivo ajustado ${formatDuration(day.target)}${day.excused ? `; ${formatDuration(day.excused)} de ${EXCUSED_LABELS[day.kind] ?? day.kind}` : ''}`}
                        >
                          {day.excused > 0 ? (
                            <span
@@ -516,16 +572,78 @@ export function SummaryScreen({ initialDate }: SummaryScreenProps) {
             </section>
           ) : null}
 
-          {period !== 'week' ? (
+          {period === 'year' ? (
             <div className="banner">
               <Icon name="info" size={16} />
               <span>
-                {period === 'month'
-                  ? 'El extra global compara las horas trabajadas con el objetivo del mes. Los distintivos de cada semana muestran su extra semanal.'
-                  : 'Las extras se calculan por semanas; en este resumen solo se cuentan los días incluidos en el periodo seleccionado.'}
+                Las extras se calculan por semanas; en este resumen solo se
+                cuentan los días incluidos en el periodo seleccionado.
               </span>
             </div>
           ) : null}
+
+          <section className="card absence-card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">Vacaciones y ausencias</div>
+                <div className="card-subtitle">{periodLabel}</div>
+              </div>
+            </div>
+            {hasAbsences ? (
+              <div className="absence-list">
+                {leaveDays.vacation > 0 ? (
+                  <div className="absence-row">
+                    <span className="absence-dot vacation" />
+                    <span className="absence-label">Vacaciones</span>
+                    <span className="absence-value">
+                      {formatDayCount(leaveDays.vacation)}
+                    </span>
+                  </div>
+                ) : null}
+                {leaveDays.personal > 0 ? (
+                  <div className="absence-row">
+                    <span className="absence-dot personal" />
+                    <span className="absence-label">Asunto propio</span>
+                    <span className="absence-value">
+                      {formatDayCount(leaveDays.personal)}
+                    </span>
+                  </div>
+                ) : null}
+                {leaveDays.sick > 0 ? (
+                  <div className="absence-row">
+                    <span className="absence-dot sick" />
+                    <span className="absence-label">Baja</span>
+                    <span className="absence-value">
+                      {formatDayCount(leaveDays.sick)}
+                    </span>
+                  </div>
+                ) : null}
+                {leaveDays.holiday > 0 ? (
+                  <div className="absence-row">
+                    <span className="absence-dot holiday" />
+                    <span className="absence-label">Festivos</span>
+                    <span className="absence-value">
+                      {formatDayCount(leaveDays.holiday)}
+                    </span>
+                  </div>
+                ) : null}
+                {medicalMinutes > 0 ? (
+                  <div className="absence-row">
+                    <span className="absence-dot medical" />
+                    <span className="absence-label">Tiempo de médico</span>
+                    <span className="absence-value medical">
+                      {formatDuration(medicalMinutes)}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <p className="empty-text" style={{ padding: '18px 16px' }}>
+                Sin vacaciones, asuntos propios, bajas ni tiempo de médico en
+                este periodo.
+              </p>
+            )}
+          </section>
         </>
       ) : (
         <div className="card card-pad">
@@ -535,6 +653,14 @@ export function SummaryScreen({ initialDate }: SummaryScreenProps) {
           </div>
         </div>
       )}
+
+      {exportOpen ? (
+        <ExportPdfModal
+          initialPeriod={period}
+          initialAnchor={anchor}
+          onClose={() => setExportOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

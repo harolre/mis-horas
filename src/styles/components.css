@@ -31,12 +31,15 @@
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1.15;
+  text-wrap: balance;
 }
 
 .screen-subtitle {
   margin-top: 3px;
   color: var(--text-3);
-  font-size: 0.86rem;
+  font-size: 0.92rem;
+  line-height: 1.35;
+  text-wrap: balance;
 }
 
 .stack {
@@ -69,11 +72,11 @@
 }
 
 .small {
-  font-size: 0.78rem;
+  font-size: 0.82rem;
 }
 
 .tiny {
-  font-size: 0.7rem;
+  font-size: 0.76rem;
 }
 
 .strong {
@@ -129,13 +132,13 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 44px;
+  min-height: 46px;
   padding: 0 16px;
   border-radius: 12px;
   border: 1px solid transparent;
   background: var(--surface-2);
   color: var(--text);
-  font-size: 0.92rem;
+  font-size: 0.95rem;
   font-weight: 650;
   text-decoration: none;
   transition: transform 0.12s ease, filter 0.12s ease, background 0.12s ease;
@@ -224,12 +227,12 @@
 }
 
 .card-title {
-  font-size: 0.94rem;
+  font-size: 1rem;
   font-weight: 700;
 }
 
 .card-subtitle {
-  font-size: 0.76rem;
+  font-size: 0.8rem;
   color: var(--text-3);
   margin-top: 1px;
 }
@@ -248,7 +251,12 @@
   border-radius: var(--radius-lg);
   background:
     radial-gradient(320px 180px at 100% 0%, rgba(255, 255, 255, 0.2), transparent 70%),
-    linear-gradient(135deg, #2563eb 0%, #1d4ed8 55%, #102a6b 100%);
+    linear-gradient(
+      135deg,
+      var(--hero-start) 0%,
+      var(--hero-mid) 55%,
+      var(--hero-end) 100%
+    );
   color: #fff;
   box-shadow: 0 16px 34px rgba(29, 78, 216, 0.28);
 }
@@ -266,7 +274,7 @@
 }
 
 .hero-label {
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -287,8 +295,8 @@
   flex-wrap: wrap;
   gap: 6px 14px;
   margin-top: 8px;
-  font-size: 0.82rem;
-  opacity: 0.88;
+  font-size: 0.88rem;
+  opacity: 0.92;
 }
 
 .hero-footer {
@@ -334,7 +342,7 @@
 }
 
 .stat-label {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   color: var(--text-3);
   font-weight: 650;
   text-transform: uppercase;
@@ -351,7 +359,7 @@
 
 .stat-note {
   margin-top: 2px;
-  font-size: 0.7rem;
+  font-size: 0.76rem;
   color: var(--text-3);
 }
 
@@ -402,7 +410,7 @@
   padding: 0 8px;
   border-radius: 9px;
   color: var(--text-3);
-  font-size: 0.84rem;
+  font-size: 0.9rem;
   font-weight: 650;
   transition: background 0.15s ease, color 0.15s ease;
 }
@@ -416,14 +424,9 @@
 /* Chips ------------------------------------------------------------------- */
 .chip-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  overflow-x: auto;
   padding: 2px 1px 4px;
-  scrollbar-width: none;
-}
-
-.chip-row::-webkit-scrollbar {
-  display: none;
 }
 
 .chip {
@@ -436,7 +439,7 @@
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-2);
-  font-size: 0.82rem;
+  font-size: 0.88rem;
   font-weight: 650;
   white-space: nowrap;
   transition: background 0.15s ease, border-color 0.15s ease;
@@ -451,6 +454,11 @@
 .chip.vacation[aria-pressed='true'] {
   background: var(--vacation-soft);
   color: var(--vacation);
+}
+
+.chip.personal[aria-pressed='true'] {
+  background: var(--personal-soft);
+  color: var(--personal);
 }
 
 .chip.holiday[aria-pressed='true'] {
@@ -471,7 +479,7 @@
   border-radius: 999px;
   background: var(--surface-3);
   color: var(--text-2);
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -484,6 +492,16 @@
 .badge.vacation {
   background: var(--vacation-soft);
   color: var(--vacation);
+}
+
+.badge.personal {
+  background: var(--personal-soft);
+  color: var(--personal);
+}
+
+.badge.medical {
+  background: var(--medical-soft);
+  color: var(--medical);
 }
 
 .badge.holiday {
@@ -519,28 +537,28 @@
 }
 
 .field-label {
-  font-size: 0.78rem;
+  font-size: 0.83rem;
   font-weight: 650;
   color: var(--text-2);
 }
 
 .field-hint {
-  font-size: 0.7rem;
+  font-size: 0.76rem;
   color: var(--text-3);
-  line-height: 1.35;
+  line-height: 1.45;
 }
 
 .input,
 .select,
 .textarea {
   width: 100%;
-  min-height: 46px;
+  min-height: 48px;
   padding: 0 12px;
   border: 1px solid var(--border-strong);
   border-radius: 12px;
   background: var(--surface);
   color: var(--text);
-  font-size: 0.95rem;
+  font-size: 1rem;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
   appearance: none;
 }
@@ -636,7 +654,7 @@
 }
 
 .list-title {
-  font-size: 0.9rem;
+  font-size: 0.94rem;
   font-weight: 650;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -645,7 +663,7 @@
 
 .list-subtitle {
   margin-top: 2px;
-  font-size: 0.74rem;
+  font-size: 0.79rem;
   color: var(--text-3);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -667,16 +685,16 @@
 }
 
 .movement-time {
-  min-width: 86px;
-  font-size: 0.86rem;
+  min-width: 92px;
+  font-size: 0.92rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
 .movement-duration {
-  min-width: 62px;
+  min-width: 66px;
   text-align: right;
-  font-size: 0.8rem;
+  font-size: 0.86rem;
   font-weight: 700;
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
@@ -797,14 +815,14 @@
 }
 
 .modal-title {
-  font-size: 1.08rem;
+  font-size: 1.16rem;
   font-weight: 750;
   letter-spacing: -0.02em;
 }
 
 .modal-subtitle {
   margin-top: 3px;
-  font-size: 0.78rem;
+  font-size: 0.84rem;
   color: var(--text-3);
   line-height: 1.4;
 }
@@ -870,8 +888,8 @@
   background: var(--text);
   color: var(--surface);
   box-shadow: var(--shadow-md);
-  font-size: 0.82rem;
-  line-height: 1.35;
+  font-size: 0.88rem;
+  line-height: 1.4;
   animation: slide-up 0.18s ease both;
   pointer-events: auto;
 }
@@ -920,10 +938,10 @@
   align-items: center;
   justify-content: center;
   gap: 3px;
-  min-height: 50px;
+  min-height: 54px;
   border-radius: 12px;
   color: var(--text-3);
-  font-size: 0.64rem;
+  font-size: 0.72rem;
   font-weight: 650;
   letter-spacing: 0.01em;
   transition: color 0.15s ease, background 0.15s ease;
@@ -943,8 +961,8 @@
   border-radius: 12px;
   background: var(--primary-soft);
   color: var(--primary);
-  font-size: 0.8rem;
-  line-height: 1.4;
+  font-size: 0.86rem;
+  line-height: 1.45;
 }
 
 .banner.warning {

@@ -155,6 +155,15 @@ export function formatDayNumber(value: ISODate): string {
   return dayNumberFormatter.format(parseISO(value));
 }
 
+export function formatWeekRangeShort(from: ISODate, to: ISODate): string {
+  const fromDate = parseISO(from);
+  const toDate = parseISO(to);
+  if (fromDate.getFullYear() !== toDate.getFullYear()) {
+    return `${formatShortDate(from)} ${fromDate.getFullYear()} – ${formatShortDate(to)} ${toDate.getFullYear()}`;
+  }
+  return `${formatShortDate(from)} – ${formatShortDate(to)} ${toDate.getFullYear()}`;
+}
+
 export function formatWeekTitle(from: ISODate, to: ISODate): string {
   const fromDate = parseISO(from);
   const toDate = parseISO(to);

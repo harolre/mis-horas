@@ -5,6 +5,7 @@ import type {
   DayKind,
   ISODate,
   Movement,
+  MovementCategory,
   Settings,
   Weekday,
 } from '../types';
@@ -161,12 +162,20 @@ export interface MovementInput {
   endMin: number;
   breakMin: number;
   crossesMidnight: boolean;
+  category?: MovementCategory;
   note?: string;
 }
 
 function validateMovementInput(input: MovementInput): void {
   if (!isValidISODate(input.date)) {
     throw new ValidationError('La fecha no es válida.');
+  }
+  if (
+    input.category !== undefined &&
+    input.category !== 'work' &&
+    input.category !== 'medical'
+  ) {
+    throw new ValidationError('El tipo de tramo no es válido.');
   }
   if (
     !Number.isInteger(input.startMin) ||
@@ -252,6 +261,7 @@ export async function addMovement(input: MovementInput): Promise<Movement> {
       endMin: input.endMin,
       breakMin: input.breakMin,
       crossesMidnight: input.crossesMidnight ? 1 : 0,
+      category: input.category ?? 'work',
       note: input.note?.trim() || undefined,
       createdAt: now,
       updatedAt: now,
@@ -278,6 +288,7 @@ export async function updateMovement(
       endMin: input.endMin,
       breakMin: input.breakMin,
       crossesMidnight: input.crossesMidnight ? 1 : 0,
+      category: input.category ?? 'work',
       note: input.note?.trim() || undefined,
       updatedAt: Date.now(),
     });
@@ -517,6 +528,7 @@ export interface DayMovementDraft {
   endMin: number;
   breakMin: number;
   crossesMidnight: boolean;
+  category?: MovementCategory;
   note?: string;
 }
 
@@ -563,6 +575,7 @@ export async function saveDayDraft(input: SaveDayDraftInput): Promise<void> {
       endMin: movement.endMin,
       breakMin: movement.breakMin,
       crossesMidnight: movement.crossesMidnight,
+      category: movement.category,
       note: movement.note,
     });
   }
@@ -610,6 +623,7 @@ export async function saveDayDraft(input: SaveDayDraftInput): Promise<void> {
           endMin: movement.endMin,
           breakMin: movement.breakMin,
           crossesMidnight: movement.crossesMidnight ? (1 as const) : (0 as const),
+          category: movement.category ?? 'work',
           note: movement.note?.trim() || undefined,
           updatedAt: now,
         };
@@ -682,17 +696,76 @@ export async function saveDayDraft(input: SaveDayDraftInput): Promise<void> {
   );
 }
 
+export async function attachmentCountsRange(
+  from: ISODate,
+  to: ISODate,
+): Promise<Record<string, number>> {
+  const attachments = await db.attachments
+    .where('date')
+    .between(from, to, true, true)
+    .toArray();
+  const counts: Record<string, number> = {};
+  for (const attachment of attachments) {
+    counts[attachment.date] = (counts[attachment.date] ?? 0) + 1;
+  }
+  return counts;
+}
+
 export interface AttachmentStats {
   count: number;
   totalSize: number;
+  archivedCount: number;
 }
 
 export async function attachmentStats(): Promise<AttachmentStats> {
   const attachments = await db.attachments.toArray();
+  const available = attachments.filter((attachment) => !attachment.archived);
   return {
     count: attachments.length,
-    totalSize: attachments.reduce((total, attachment) => total + attachment.size, 0),
+    totalSize: available.reduce(
+      (total, attachment) => total + attachment.size,
+      0,
+    ),
+    archivedCount: attachments.length - available.length,
   };
+}
+
+export interface AttachmentYear {
+  year: string;
+  count: number;
+  totalSize: number;
+  availableCount: number;
+  archivedCount: number;
+}
+
+export async function attachmentYears(): Promise<AttachmentYear[]> {
+  const [attachments, fileIds] = await Promise.all([
+    db.attachments.toArray(),
+    db.attachmentFiles.toCollection().primaryKeys(),
+  ]);
+  const available = new Set(fileIds);
+  const years = new Map<string, AttachmentYear>();
+  for (const attachment of attachments) {
+    const year = attachment.date.slice(0, 4);
+    const current = years.get(year) ?? {
+      year,
+      count: 0,
+      totalSize: 0,
+      availableCount: 0,
+      archivedCount: 0,
+    };
+    current.count += 1;
+    if (available.has(attachment.id)) {
+      current.availableCount += 1;
+      current.totalSize += attachment.size;
+    } else {
+      current.archivedCount += 1;
+    }
+    years.set(year, current);
+  }
+  return Array.from(years.values()).sort((a, b) =>
+    b.year.localeCompare(a.year),
+  );
 }
 
 export interface CleanupResult {

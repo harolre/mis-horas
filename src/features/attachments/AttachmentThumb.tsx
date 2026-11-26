@@ -24,7 +24,10 @@ export function AttachmentThumb({ attachment }: { attachment: Attachment }) {
 
   const extension = attachment.name.split('.').pop()?.slice(0, 4) ?? '';
   return (
-    <div className="attach-file-icon">
+    <div
+      className="attach-file-icon"
+      title={attachment.archived ? 'Foto archivada' : undefined}
+    >
       <Icon
         name={attachment.mime === 'application/pdf' ? 'file' : 'image'}
         size={26}

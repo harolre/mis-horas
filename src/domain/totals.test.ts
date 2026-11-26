@@ -85,7 +85,12 @@ describe('totals', () => {
     expect(week.worked).toBe(1080);
     expect(week.target).toBe(960);
     expect(week.extra).toBe(120);
-    expect(week.excused).toEqual({ vacation: 480, sick: 480, holiday: 480 });
+    expect(week.excused).toEqual({
+      vacation: 480,
+      personal: 0,
+      sick: 480,
+      holiday: 480,
+    });
     expect(sumTarget('2026-10-19', '2026-10-25', settings, days)).toBe(960);
 
     const month = periodTotals(
@@ -104,7 +109,22 @@ describe('totals', () => {
     const monthBar = monthlyBreakdown('2026-10-01', movements, settings, days)[9];
     expect(monthBar.month).toBe('2026-10-01');
     expect(monthBar.target).toBe(9120);
-    expect(monthBar.excused).toEqual({ vacation: 480, sick: 480, holiday: 480 });
+    expect(monthBar.excused).toEqual({
+      vacation: 480,
+      personal: 0,
+      sick: 480,
+      holiday: 480,
+    });
+  });
+
+  it('trata el asunto propio como una ausencia que reduce el objetivo', () => {
+    const days: DayEntry[] = [
+      { date: '2026-10-21', kind: 'personal', updatedAt: 0 },
+    ];
+    const week = weekTotals('2026-10-21', [], settings, days);
+    expect(targetForDate('2026-10-21', settings, days)).toBe(0);
+    expect(week.target).toBe(1920);
+    expect(week.excused.personal).toBe(480);
   });
 
   it('agrupa por cuenta y suma extras de semanas del periodo', () => {

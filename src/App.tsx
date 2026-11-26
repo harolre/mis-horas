@@ -21,9 +21,12 @@ function initialTheme(): ThemeMode {
   return 'auto';
 }
 
+type SummaryPeriod = 'week' | 'month' | 'year';
+
 export function App() {
   const [tab, setTab] = useState<TabId>('home');
   const [date, setDate] = useState(todayISO());
+  const [summaryPeriod, setSummaryPeriod] = useState<SummaryPeriod>('week');
   const [theme, setTheme] = useState<ThemeMode>(initialTheme);
 
   useEffect(() => {
@@ -60,6 +63,12 @@ export function App() {
     setTab('home');
   }
 
+  function openMonthSummary(nextDate: string) {
+    setDate(nextDate);
+    setSummaryPeriod('month');
+    setTab('summary');
+  }
+
   return (
     <div className="app-shell">
       <main className="app-main">
@@ -70,9 +79,17 @@ export function App() {
             onOpenSummary={() => setTab('summary')}
           />
         ) : null}
-        {tab === 'summary' ? <SummaryScreen initialDate={date} /> : null}
+        {tab === 'summary' ? (
+          <SummaryScreen
+            initialDate={date}
+            initialPeriod={summaryPeriod}
+          />
+        ) : null}
         {tab === 'calendar' ? (
-          <CalendarScreen onSelectDate={selectDate} />
+          <CalendarScreen
+            onSelectDate={selectDate}
+            onOpenSummary={openMonthSummary}
+          />
         ) : null}
         {tab === 'accounts' ? <AccountsScreen /> : null}
         {tab === 'settings' ? (

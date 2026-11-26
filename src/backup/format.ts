@@ -69,6 +69,7 @@ export interface ProgressInfo {
   completed: number;
   total: number;
   percent: number;
+  detail?: string;
 }
 
 export interface BackupOptions {

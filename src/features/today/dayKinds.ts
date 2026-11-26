@@ -14,6 +14,12 @@ export const DAY_KINDS: Array<{
     description: 'Vacaciones',
   },
   {
+    value: 'personal',
+    label: 'Asunto propio',
+    chipClass: 'personal',
+    description: 'Asunto propio',
+  },
+  {
     value: 'holiday',
     label: 'Festivo',
     chipClass: 'holiday',
