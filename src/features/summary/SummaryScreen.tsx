@@ -1,15 +1,8 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import type {
-  Account,
-  DayEntry,
-  DayKind,
-  ISODate,
-  Movement,
-} from '../../types';
+import type { DayEntry, DayKind, ISODate, Movement } from '../../types';
 import {
   getSettings,
-  listAccounts,
   listDaysRange,
   listMovementsRange,
 } from '../../db/repos';
@@ -41,10 +34,12 @@ import {
   periodTotals,
   weeklyBreakdown,
 } from '../../domain/totals';
+import { ABSENCE_KINDS, dayKindInfo } from '../../domain/dayKinds';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { Icon } from '../../components/Icon';
 import { ProgressBar } from '../../components/ProgressBar';
 import { Segmented } from '../../components/Segmented';
+import { PeriodNavigator } from '../../components/PeriodNavigator';
 import { ExportPdfModal } from './ExportPdfModal';
 
 type Period = 'week' | 'month' | 'year';
@@ -54,20 +49,6 @@ const PERIOD_OPTIONS = [
   { value: 'month', label: 'Mes' },
   { value: 'year', label: 'Año' },
 ];
-
-const EXCUSED_KINDS = [
-  { kind: 'vacation', label: 'Vacaciones' },
-  { kind: 'personal', label: 'Asunto propio' },
-  { kind: 'sick', label: 'Baja' },
-  { kind: 'holiday', label: 'Festivo' },
-] as const;
-
-const EXCUSED_LABELS: Record<string, string> = {
-  vacation: 'vacaciones',
-  personal: 'asunto propio',
-  sick: 'baja',
-  holiday: 'festivo',
-};
 
 function formatDayCount(count: number): string {
   return `${count} ${count === 1 ? 'día' : 'días'}`;
@@ -87,11 +68,6 @@ export function SummaryScreen({
   const [exportOpen, setExportOpen] = useState(false);
 
   const settings = useLiveQuery(() => getSettings(), [], undefined);
-  const accounts = useLiveQuery(
-    () => listAccounts(true),
-    [],
-    [] as Account[],
-  );
 
   const weekStartDay = settings?.weekStart ?? 1;
   const from: ISODate =
@@ -165,15 +141,6 @@ export function SummaryScreen({
         ? formatMonthYear(anchor)
         : String(parseISO(anchor).getFullYear());
 
-  const accountTotals = accounts
-    .map((account) => ({
-      account,
-      minutes: totals?.perAccount[account.id] ?? 0,
-    }))
-    .filter((item) => item.minutes > 0)
-    .sort((a, b) => b.minutes - a.minutes);
-  const maxAccount = Math.max(1, ...accountTotals.map((item) => item.minutes));
-
   const periodDays = settings
     ? daysOfWeek(from, movements, settings, days)
     : [];
@@ -241,33 +208,21 @@ export function SummaryScreen({
         label="Periodo del resumen"
       />
 
-      <div className="card card-pad row-between">
-        <button
-          type="button"
-          className="icon-button plain"
-          onClick={() => shift(-1)}
-          aria-label="Periodo anterior"
-        >
-          <Icon name="chevron-left" size={19} />
-        </button>
-        <div style={{ minWidth: 0 }}>
-          <div className="period-title">{title}</div>
-          <div className="period-subtitle">
-            {period === 'week'
+      <div className="card card-pad">
+        <PeriodNavigator
+          title={title}
+          subtitle={
+            period === 'week'
               ? 'Semana completa'
               : period === 'month'
-                ? 'Extra por semanas que empiezan en el mes'
-                : 'Extra por semanas que empiezan en el año'}
-          </div>
-        </div>
-        <button
-          type="button"
-          className="icon-button plain"
-          onClick={() => shift(1)}
-          aria-label="Periodo siguiente"
-        >
-          <Icon name="chevron-right" size={19} />
-        </button>
+                ? 'Mes completo'
+                : 'Año completo'
+          }
+          onPrevious={() => shift(-1)}
+          onNext={() => shift(1)}
+          previousLabel="Periodo anterior"
+          nextLabel="Periodo siguiente"
+        />
       </div>
 
       {totals ? (
@@ -324,55 +279,6 @@ export function SummaryScreen({
             </div>
           </div>
 
-          <section className="card">
-            <div className="card-header">
-              <div>
-                <div className="card-title">Por cuenta</div>
-                <div className="card-subtitle">
-                  Horas del periodo seleccionado
-                </div>
-              </div>
-            </div>
-            {accountTotals.length === 0 ? (
-              <p className="empty-text" style={{ padding: '18px 16px' }}>
-                No hay horas registradas en este periodo.
-              </p>
-            ) : (
-              <div className="list">
-                {accountTotals.map(({ account, minutes }) => (
-                  <div className="breakdown-row" key={account.id}>
-                    <span
-                      className="account-breakdown-dot"
-                      style={{ background: account.color }}
-                    />
-                    <span
-                      className="breakdown-name"
-                      title={account.name}
-                      style={{ width: 92 }}
-                    >
-                      {account.name}
-                      {account.archived ? ' ·' : ''}
-                    </span>
-                    <div className="breakdown-bar">
-                      <div className="progress" style={{ height: 6 }}>
-                        <div
-                          className="progress-bar"
-                          style={{
-                            width: `${(minutes / maxAccount) * 100}%`,
-                            background: account.color,
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <span className="breakdown-value">
-                      {formatDuration(minutes)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-
           {period === 'week' ? (
             <section className="card">
               <div className="card-header">
@@ -384,9 +290,10 @@ export function SummaryScreen({
                   <div className="day-hours-legend" aria-label="Leyenda de horas">
                     <span><i className="day-hours-swatch target" /> Hasta objetivo</span>
                     <span><i className="day-hours-swatch excess" /> Exceso diario</span>
-                    {EXCUSED_KINDS.map(({ kind, label }) => (
-                      <span key={kind}>
-                        <i className={`day-hours-swatch ${kind}`} /> {label}
+                    {ABSENCE_KINDS.map((item) => (
+                      <span key={item.value}>
+                        <i className={`day-hours-swatch ${item.chipClass}`} />{' '}
+                        {item.label}
                       </span>
                     ))}
                   </div>
@@ -403,7 +310,7 @@ export function SummaryScreen({
                         className="progress day-hours-track"
                         style={{ height: 8, width: `${dayTargetTrackWidth}%` }}
                         role="img"
-                         aria-label={`${formatDuration(day.worked)} trabajadas; objetivo ajustado ${formatDuration(day.target)}${day.excused ? `; ${formatDuration(day.excused)} de ${EXCUSED_LABELS[day.kind] ?? day.kind}` : ''}`}
+                         aria-label={`${formatDuration(day.worked)} trabajadas; objetivo ajustado ${formatDuration(day.target)}${day.excused ? `; ${formatDuration(day.excused)} de ${dayKindInfo(day.kind).label.toLowerCase()}` : ''}`}
                        >
                          {day.excused > 0 ? (
                            <span
@@ -454,9 +361,10 @@ export function SummaryScreen({
                   </div>
                   <div className="day-hours-legend" aria-label="Leyenda de horas">
                     <span><i className="day-hours-swatch target" /> Trabajadas</span>
-                    {EXCUSED_KINDS.map(({ kind, label }) => (
-                      <span key={kind}>
-                        <i className={`day-hours-swatch ${kind}`} /> {label}
+                    {ABSENCE_KINDS.map((item) => (
+                      <span key={item.value}>
+                        <i className={`day-hours-swatch ${item.chipClass}`} />{' '}
+                        {item.label}
                       </span>
                     ))}
                   </div>
@@ -486,13 +394,13 @@ export function SummaryScreen({
                             className="hours-stack-segment worked"
                             style={{ width: `${(week.worked / barScale) * 100}%` }}
                           />
-                          {EXCUSED_KINDS.map(({ kind }) =>
-                            week.excused[kind] > 0 ? (
+                          {ABSENCE_KINDS.map((item) =>
+                            week.excused[item.value] > 0 ? (
                               <span
-                                key={kind}
-                                className={`hours-stack-segment ${kind}`}
+                                key={item.value}
+                                className={`hours-stack-segment ${item.chipClass}`}
                                 style={{
-                                  width: `${(week.excused[kind] / barScale) * 100}%`,
+                                  width: `${(week.excused[item.value] / barScale) * 100}%`,
                                 }}
                               />
                             ) : null,
@@ -525,9 +433,10 @@ export function SummaryScreen({
                   </div>
                   <div className="day-hours-legend" aria-label="Leyenda de horas">
                     <span><i className="day-hours-swatch target" /> Trabajadas</span>
-                    {EXCUSED_KINDS.map(({ kind, label }) => (
-                      <span key={kind}>
-                        <i className={`day-hours-swatch ${kind}`} /> {label}
+                    {ABSENCE_KINDS.map((item) => (
+                      <span key={item.value}>
+                        <i className={`day-hours-swatch ${item.chipClass}`} />{' '}
+                        {item.label}
                       </span>
                     ))}
                   </div>
@@ -546,13 +455,13 @@ export function SummaryScreen({
                             className="hours-stack-segment worked"
                             style={{ width: `${(month.worked / maxMonth) * 100}%` }}
                           />
-                          {EXCUSED_KINDS.map(({ kind }) =>
-                            month.excused[kind] > 0 ? (
+                          {ABSENCE_KINDS.map((item) =>
+                            month.excused[item.value] > 0 ? (
                               <span
-                                key={kind}
-                                className={`hours-stack-segment ${kind}`}
+                                key={item.value}
+                                className={`hours-stack-segment ${item.chipClass}`}
                                 style={{
-                                  width: `${(month.excused[kind] / maxMonth) * 100}%`,
+                                  width: `${(month.excused[item.value] / maxMonth) * 100}%`,
                                 }}
                               />
                             ) : null,

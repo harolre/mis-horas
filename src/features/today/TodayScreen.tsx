@@ -21,7 +21,7 @@ import { ScreenHeader } from '../../components/ScreenHeader';
 import { Icon } from '../../components/Icon';
 import { ProgressBar } from '../../components/ProgressBar';
 import { DayEditorSheet } from './DayEditorSheet';
-import { kindInfo } from './dayKinds';
+import { dayKindInfo } from '../../domain/dayKinds';
 
 interface TodayScreenProps {
   date: string;
@@ -226,7 +226,7 @@ export function TodayScreen({
 
       <section className="card week-card" aria-label="Días de la semana">
         {rows.map((row) => {
-          const rowInfo = kindInfo(row.kind);
+          const rowInfo = dayKindInfo(row.kind);
           const rowIsToday = row.date === today;
           return (
             <div

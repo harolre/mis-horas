@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { Modal } from '../../components/Modal';
 import { Icon } from '../../components/Icon';
 import { Segmented } from '../../components/Segmented';
+import { PeriodNavigator } from '../../components/PeriodNavigator';
 import { useToast } from '../../components/Toast';
 import { addDays, addMonths, addYears } from '../../domain/date';
 import { formatDuration } from '../../domain/time';
@@ -150,29 +151,15 @@ export function ExportPdfModal({
       ) : null}
 
       {!pdf ? (
-      <div className="export-period-nav">
-        <button
-          type="button"
-          className="icon-button plain"
-          onClick={() => shift(-1)}
-          aria-label={`${periodLabel} anterior`}
+        <PeriodNavigator
+          title={report?.title ?? 'Cargando…'}
+          onPrevious={() => shift(-1)}
+          onNext={() => shift(1)}
+          previousLabel={`${periodLabel} anterior`}
+          nextLabel={`${periodLabel} siguiente`}
+          compact
           disabled={busy}
-        >
-          <Icon name="chevron-left" size={19} />
-        </button>
-        <div className="export-period-label">
-          {report?.title ?? 'Cargando…'}
-        </div>
-        <button
-          type="button"
-          className="icon-button plain"
-          onClick={() => shift(1)}
-          aria-label={`${periodLabel} siguiente`}
-          disabled={busy}
-        >
-          <Icon name="chevron-right" size={19} />
-        </button>
-      </div>
+        />
       ) : null}
 
       {pdf ? (

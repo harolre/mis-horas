@@ -23,7 +23,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { useToast } from '../../components/Toast';
 import { AttachmentThumb } from '../attachments/AttachmentThumb';
 import { AttachmentPreviewModal } from '../attachments/AttachmentPreviewModal';
-import { DAY_KINDS, kindInfo } from './dayKinds';
+import { DAY_KINDS, dayKindInfo } from '../../domain/dayKinds';
 import { MovementDraftForm } from './MovementDraftForm';
 import {
   draftDuration,
@@ -140,7 +140,7 @@ export function DayEditorSheet({
 
   const accountMap = new Map(accounts.map((account) => [account.id, account]));
   const activeAccounts = accounts.filter((account) => !account.archived);
-  const info = kindInfo(kind);
+  const info = dayKindInfo(kind);
   const worked = movements.reduce(
     (total, movement) => total + draftDuration(movement),
     0,

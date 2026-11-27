@@ -89,6 +89,22 @@ test('el calendario muestra el resumen del día y permite editarlo', async ({
   await expect(page.locator('.modal')).toHaveCount(0);
 });
 
+test('Ajustes mantiene las acciones avanzadas plegadas', async ({ page }) => {
+  await page.getByRole('button', { name: 'Ajustes', exact: true }).click();
+  const toggle = page.getByRole('button', { name: 'Avanzado', exact: true });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(
+    page.getByRole('button', { name: 'Elegir archivo de copia' }),
+  ).toBeHidden();
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(
+    page.getByRole('button', { name: 'Elegir archivo de copia' }),
+  ).toBeVisible();
+  await expect(page.getByText('Zona de riesgo')).toBeVisible();
+});
+
 test('prepara el PDF del periodo seleccionado', async ({ page }) => {
   await page.getByRole('button', { name: 'Resumen', exact: true }).click();
   await page.getByRole('button', { name: 'PDF', exact: true }).click();

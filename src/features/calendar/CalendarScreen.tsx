@@ -28,46 +28,17 @@ import {
   formatTime,
 } from '../../domain/time';
 import { periodTotals, targetForDate } from '../../domain/totals';
+import { ABSENCE_KINDS, dayKindInfo } from '../../domain/dayKinds';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { Icon } from '../../components/Icon';
 import { ProgressBar } from '../../components/ProgressBar';
+import { PeriodNavigator } from '../../components/PeriodNavigator';
 import { DayEditorSheet } from '../today/DayEditorSheet';
 import { ExportPdfModal } from '../summary/ExportPdfModal';
 
 interface CalendarScreenProps {
   onSelectDate: (date: string) => void;
   onOpenSummary: (date: string) => void;
-}
-
-const KIND_SHORT: Record<string, string> = {
-  vacation: 'Vac',
-  personal: 'Propio',
-  holiday: 'Fest',
-  sick: 'Baja',
-};
-
-const KIND_LABEL: Record<string, string> = {
-  vacation: 'vacaciones',
-  personal: 'asunto propio',
-  holiday: 'festivo',
-  sick: 'baja',
-};
-
-const ABSENCE_KINDS: Array<{
-  kind: Exclude<DayKind, 'work'>;
-  label: [singular: string, plural: string];
-}> = [
-  { kind: 'vacation', label: ['vacación', 'vacaciones'] },
-  { kind: 'personal', label: ['asunto propio', 'asuntos propios'] },
-  { kind: 'sick', label: ['baja', 'bajas'] },
-  { kind: 'holiday', label: ['festivo', 'festivos'] },
-];
-
-function absenceText(
-  labels: [singular: string, plural: string],
-  count: number,
-): string {
-  return `${count} ${count === 1 ? labels[0] : labels[1]}`;
 }
 
 export function CalendarScreen({
@@ -175,8 +146,8 @@ export function CalendarScreen({
       ? targetForDate(selectedDate, settings, days)
       : 0;
   const selectedKind = selectedDay?.kind ?? 'work';
-  const selectedKindLabel =
-    selectedKind === 'work' ? 'Trabajo' : KIND_LABEL[selectedKind];
+  const selectedKindInfo = dayKindInfo(selectedKind);
+  const selectedKindLabel = selectedKindInfo.label;
   const editingTarget =
     editingDate && settings
       ? targetForDate(editingDate, settings, days)
@@ -208,7 +179,7 @@ export function CalendarScreen({
 
   function cellText(date: string): string {
     const day = dayByDate.get(date);
-    if (day && day.kind !== 'work') return KIND_SHORT[day.kind] ?? '';
+    if (day && day.kind !== 'work') return dayKindInfo(day.kind).shortLabel;
     const worked = workedByDate.get(date) ?? 0;
     return worked > 0 ? formatCompactDuration(worked) : '';
   }
@@ -219,7 +190,7 @@ export function CalendarScreen({
     const parts = [formatShortDate(date)];
     if (!inMonth) parts.push('fuera del mes');
     if (day && day.kind !== 'work') {
-      parts.push(KIND_LABEL[day.kind] ?? day.kind);
+      parts.push(dayKindInfo(day.kind).label.toLowerCase());
     }
     if (worked > 0) parts.push(formatDuration(worked));
     if (day?.attachmentCount) {
@@ -262,31 +233,16 @@ export function CalendarScreen({
       />
 
       <section className="card card-pad calendar-month-summary">
-        <div className="row-between calendar-month-nav">
-          <button
-            type="button"
-            className="icon-button plain"
-            onClick={() => setAnchor(addMonths(anchor, -1))}
-            aria-label="Mes anterior"
-          >
-            <Icon name="chevron-left" size={19} />
-          </button>
-          <div style={{ minWidth: 0, textAlign: 'center' }}>
-            <div className="period-title">{formatMonthYear(anchor)}</div>
-            <div className="period-subtitle">
-              {monthDaysWithHours}{' '}
-              {monthDaysWithHours === 1 ? 'día' : 'días'} con horas
-            </div>
-          </div>
-          <button
-            type="button"
-            className="icon-button plain"
-            onClick={() => setAnchor(addMonths(anchor, 1))}
-            aria-label="Mes siguiente"
-          >
-            <Icon name="chevron-right" size={19} />
-          </button>
-        </div>
+        <PeriodNavigator
+          title={formatMonthYear(anchor)}
+          subtitle={`${monthDaysWithHours} ${
+            monthDaysWithHours === 1 ? 'día' : 'días'
+          } con horas`}
+          onPrevious={() => setAnchor(addMonths(anchor, -1))}
+          onNext={() => setAnchor(addMonths(anchor, 1))}
+          previousLabel="Mes anterior"
+          nextLabel="Mes siguiente"
+        />
 
         {monthTotals ? (
           <>
@@ -317,13 +273,17 @@ export function CalendarScreen({
             />
             <div className="calendar-summary-tags">
               {ABSENCE_KINDS.filter(
-                (item) => monthAbsences[item.kind] > 0,
-              ).map((item) => (
-                <span className="calendar-summary-tag" key={item.kind}>
-                  <i className={`absence-dot ${item.kind}`} />
-                  {absenceText(item.label, monthAbsences[item.kind])}
-                </span>
-              ))}
+                (item) => monthAbsences[item.value] > 0,
+              ).map((item) => {
+                const count = monthAbsences[item.value];
+                return (
+                  <span className="calendar-summary-tag" key={item.value}>
+                    <i className={`absence-dot ${item.chipClass}`} />
+                    {count}{' '}
+                    {(count === 1 ? item.label : item.pluralLabel).toLowerCase()}
+                  </span>
+                );
+              })}
               {monthMedicalMinutes > 0 ? (
                 <span className="calendar-summary-tag">
                   <i className="absence-dot medical" />
@@ -419,34 +379,15 @@ export function CalendarScreen({
             />
             Extra
           </span>
-          <span className="legend-item">
-            <span
-              className="legend-dot"
-              style={{ background: 'var(--vacation)' }}
-            />
-            Vacaciones
-          </span>
-          <span className="legend-item">
-            <span
-              className="legend-dot"
-              style={{ background: 'var(--personal)' }}
-            />
-            Asunto propio
-          </span>
-          <span className="legend-item">
-            <span
-              className="legend-dot"
-              style={{ background: 'var(--holiday)' }}
-            />
-            Festivo
-          </span>
-          <span className="legend-item">
-            <span
-              className="legend-dot"
-              style={{ background: 'var(--sick)' }}
-            />
-            Baja
-          </span>
+          {ABSENCE_KINDS.map((item) => (
+            <span className="legend-item" key={item.value}>
+              <span
+                className="legend-dot"
+                style={{ background: `var(${item.colorVar})` }}
+              />
+              {item.label}
+            </span>
+          ))}
           <span className="legend-item">
             <Icon name="paperclip" size={11} />
             Adjuntos

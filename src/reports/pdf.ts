@@ -29,7 +29,6 @@ type Palette = {
 };
 
 let COLORS: Palette;
-let rgbFactory: (red: number, green: number, blue: number) => Color;
 
 type Fonts = {
   regular: PDFFont;
@@ -214,7 +213,6 @@ const TABLE = {
   date: MARGIN,
   status: MARGIN + 55,
   schedule: MARGIN + 125,
-  account: MARGIN + 320,
   total: MARGIN + 475,
   right: PAGE_WIDTH - MARGIN,
 };
@@ -237,13 +235,6 @@ function drawTableHeader(cursor: Cursor): void {
   });
   drawText(cursor.page, 'HORARIO', {
     x: TABLE.schedule,
-    y: cursor.y,
-    size: 7.5,
-    font: cursor.fonts.bold,
-    color: COLORS.muted,
-  });
-  drawText(cursor.page, 'CUENTA', {
-    x: TABLE.account,
     y: cursor.y,
     size: 7.5,
     font: cursor.fonts.bold,
@@ -324,13 +315,6 @@ function drawDayRow(
       color: COLORS.muted,
     });
     drawText(cursor.page, '—', {
-      x: TABLE.account,
-      y: cursor.y,
-      size: 8,
-      font: cursor.fonts.regular,
-      color: COLORS.muted,
-    });
-    drawText(cursor.page, '—', {
       x: TABLE.total,
       y: cursor.y,
       size: 8,
@@ -351,15 +335,7 @@ function drawDayRow(
         font: cursor.fonts.regular,
         color:
           movement.category === 'medical' ? COLORS.medical : COLORS.text,
-        maxWidth: 185,
-      });
-      drawText(cursor.page, movement.accountName, {
-        x: TABLE.account,
-        y,
-        size: 7.4,
-        font: cursor.fonts.regular,
-        color: COLORS.muted,
-        maxWidth: 105,
+        maxWidth: 330,
       });
       if (line === 0) {
         drawText(cursor.page, formatDuration(day.total), {
@@ -623,42 +599,6 @@ function drawAbsences(cursor: Cursor, report: PeriodReport): void {
   cursor.y -= 4;
 }
 
-function drawAccounts(cursor: Cursor, report: PeriodReport): void {
-  if (report.accounts.length === 0) return;
-  drawSectionTitle(cursor, 'Total por cuenta');
-  for (const account of report.accounts) {
-    ensure(cursor, 18);
-    cursor.page.drawCircle({
-      x: MARGIN + 4,
-      y: cursor.y + 3,
-      size: 3,
-      color: account.color
-        ? rgbFactory(
-            parseInt(account.color.slice(1, 3), 16) / 255,
-            parseInt(account.color.slice(3, 5), 16) / 255,
-            parseInt(account.color.slice(5, 7), 16) / 255,
-          )
-        : COLORS.primary,
-    });
-    drawText(cursor.page, account.name, {
-      x: MARGIN + 16,
-      y: cursor.y,
-      size: 8.5,
-      font: cursor.fonts.regular,
-      color: COLORS.text,
-      maxWidth: 220,
-    });
-    drawText(cursor.page, formatDuration(account.minutes), {
-      x: MARGIN + 260,
-      y: cursor.y,
-      size: 8.5,
-      font: cursor.fonts.bold,
-      color: COLORS.text,
-    });
-    cursor.y -= 16;
-  }
-}
-
 function drawFooter(
   page: PDFPage,
   fonts: Fonts,
@@ -690,7 +630,6 @@ function drawFooter(
 
 export async function createPeriodPdf(report: PeriodReport): Promise<Blob> {
   const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
-  rgbFactory = rgb;
   COLORS = {
     text: rgb(0.06, 0.09, 0.16),
     muted: rgb(0.4, 0.45, 0.52),
@@ -753,7 +692,6 @@ export async function createPeriodPdf(report: PeriodReport): Promise<Blob> {
     drawDaysTable(cursor, report);
   }
   drawAbsences(cursor, report);
-  drawAccounts(cursor, report);
 
   const pages = doc.getPages();
   pages.forEach((page, index) => {

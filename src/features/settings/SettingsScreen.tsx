@@ -89,6 +89,7 @@ export function SettingsScreen({
   const [exportDataOpen, setExportDataOpen] = useState(false);
   const [exportAttachmentsOpen, setExportAttachmentsOpen] = useState(false);
   const [exportYear, setExportYear] = useState(todayISO().slice(0, 4));
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [eraseOpen, setEraseOpen] = useState(false);
   const [eraseConfirmed, setEraseConfirmed] = useState(false);
@@ -447,65 +448,94 @@ export function SettingsScreen({
             )}
           </div>
 
-          <div className="settings-row column" style={{ gap: 10 }}>
+          <div className="settings-row">
             <div>
-              <div className="settings-title">Restaurar copia</div>
+              <div className="settings-title">Última exportación</div>
               <div className="settings-desc">
-                Restaura los datos, las fotos de un año o una copia completa
-                antigua. La app detecta el tipo de archivo.
+                {formatLastBackup(lastBackup)}
               </div>
             </div>
-            <button
-              type="button"
-              className="btn btn-secondary btn-block"
-              onClick={() => setImportOpen(true)}
-            >
-              <Icon name="upload" size={17} />
-              Elegir archivo de copia
-            </button>
-            <div className="tiny muted">
-              Última exportación: {formatLastBackup(lastBackup)}
-            </div>
-            <p className="field-hint">
-              La contraseña no se guarda. Sin ella, la copia no se puede
-              recuperar.
-            </p>
-            {backupOverdue ? (
-              <p className="field-hint">
-                {lastBackup
-                  ? 'Han pasado más de 30 días desde la última exportación.'
-                  : 'Todavía no has exportado ninguna copia.'}
-              </p>
-            ) : null}
           </div>
         </div>
+        {backupOverdue ? (
+          <p className="field-hint">
+            {lastBackup
+              ? 'Han pasado más de 30 días desde la última exportación.'
+              : 'Todavía no has exportado ninguna copia.'}
+          </p>
+        ) : null}
       </section>
 
       <section className="settings-section">
-        <h2 className="section-title">Zona de riesgo</h2>
-        <div className="settings-card danger-zone">
-          <div className="settings-row">
-            <div>
-              <div className="settings-title text-danger">
-                Borrar todos los datos
-              </div>
-              <div className="settings-desc">
-                Elimina cuentas, tramos, notas, adjuntos y ajustes de este
-                dispositivo. No se puede deshacer.
+        <button
+          type="button"
+          className="settings-advanced-toggle"
+          aria-expanded={advancedOpen}
+          onClick={() => setAdvancedOpen((open) => !open)}
+        >
+          <span>Avanzado</span>
+          <Icon
+            name="chevron-right"
+            size={17}
+            className={`settings-advanced-chevron${
+              advancedOpen ? ' open' : ''
+            }`}
+          />
+        </button>
+
+        {advancedOpen ? (
+          <>
+            <h2 className="section-title">Restaurar copia</h2>
+            <div className="settings-card">
+              <div className="settings-row column" style={{ gap: 10 }}>
+                <div>
+                  <div className="settings-title">Archivo de copia</div>
+                  <div className="settings-desc">
+                    Restaura los datos, las fotos de un año o una copia completa
+                    antigua. La app detecta el tipo de archivo.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-block"
+                  onClick={() => setImportOpen(true)}
+                >
+                  <Icon name="upload" size={17} />
+                  Elegir archivo de copia
+                </button>
+                <p className="field-hint">
+                  La contraseña no se guarda. Sin ella, la copia no se puede
+                  recuperar.
+                </p>
               </div>
             </div>
-            <button
-              type="button"
-              className="btn btn-danger btn-sm"
-              onClick={() => {
-                setEraseConfirmed(false);
-                setEraseOpen(true);
-              }}
-            >
-              Borrar
-            </button>
-          </div>
-        </div>
+
+            <h2 className="section-title">Zona de riesgo</h2>
+            <div className="settings-card danger-zone">
+              <div className="settings-row">
+                <div>
+                  <div className="settings-title text-danger">
+                    Borrar todos los datos
+                  </div>
+                  <div className="settings-desc">
+                    Elimina cuentas, tramos, notas, adjuntos y ajustes de este
+                    dispositivo. No se puede deshacer.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-danger btn-sm"
+                  onClick={() => {
+                    setEraseConfirmed(false);
+                    setEraseOpen(true);
+                  }}
+                >
+                  Borrar
+                </button>
+              </div>
+            </div>
+          </>
+        ) : null}
       </section>
 
       <p className="settings-footer">

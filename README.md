@@ -13,7 +13,7 @@ No tiene backend, no sincroniza datos y no envía información a ningún servido
 - Objetivo semanal global, con horas distintas para cada día de la semana.
 - Cálculo de horas extra semanales: `max(0, horas de la semana − objetivo de la semana)`.
 - Exceso diario informativo cuando un día supera su objetivo, sin alterar el cálculo semanal del extra.
-- Resumen semanal, mensual y anual, con desglose por cuenta.
+- Resumen semanal, mensual y anual, con totales, ausencias y tiempo de médico.
 - Resumen de vacaciones, asuntos propios, bajas, festivos y tiempo de médico del periodo seleccionado.
 - Exportación del resumen a PDF por semana, mes o año, con detalle diario y marcas de adjuntos.
 - Calendario mensual con resumen del mes, indicadores de horas, ausencias y adjuntos. Al tocar un día se muestra su resumen y se puede editar sin salir del calendario.
@@ -158,7 +158,7 @@ Los adjuntos pertenecen al día, no a un tramo concreto. Se añaden desde la hoj
 
 En **Resumen**, el botón **PDF** permite elegir semana, mes o año. La semana parte de la que está seleccionada y se puede cambiar con las flechas; el mes y el año también se eligen con flechas.
 
-- Semana y mes: detalle diario, totales por cuenta, ausencias y tiempo de médico.
+- Semana y mes: detalle diario, ausencias y tiempo de médico.
 - Año: resumen mes a mes.
 - El clip indica que ese día tiene adjuntos; las fotos no se incluyen en el PDF.
 - El archivo se genera en el dispositivo y se comparte o descarga desde el menú del sistema.

@@ -1,5 +1,4 @@
 import type {
-  Account,
   DayEntry,
   DayKind,
   ISODate,
@@ -9,7 +8,6 @@ import type {
 import {
   attachmentCountsRange,
   getSettings,
-  listAccounts,
   listDaysRange,
   listMovementsRange,
 } from '../db/repos';
@@ -28,6 +26,7 @@ import {
 } from '../domain/date';
 import { durationMinutes } from '../domain/time';
 import { periodTotals } from '../domain/totals';
+import { dayKindInfo } from '../domain/dayKinds';
 
 export type ReportPeriod = 'week' | 'month' | 'year';
 
@@ -36,7 +35,6 @@ export interface ReportMovement {
   endMin: number;
   breakMin: number;
   category: 'work' | 'medical';
-  accountName: string;
   minutes: number;
 }
 
@@ -63,12 +61,6 @@ export interface ReportMonth {
   attachmentCount: number;
 }
 
-export interface ReportAccountTotal {
-  name: string;
-  color: string;
-  minutes: number;
-}
-
 export interface PeriodReport {
   period: ReportPeriod;
   from: ISODate;
@@ -84,17 +76,8 @@ export interface PeriodReport {
   medicalMinutes: number;
   attachmentCount: number;
   attachmentDays: number;
-  accounts: ReportAccountTotal[];
   months: ReportMonth[];
 }
-
-const KIND_LABELS: Record<DayKind, string> = {
-  work: 'Trabajo',
-  vacation: 'Vacaciones',
-  personal: 'Asunto propio',
-  holiday: 'Festivo',
-  sick: 'Baja',
-};
 
 function emptyAbsences(): Record<Exclude<DayKind, 'work'>, number> {
   return { vacation: 0, personal: 0, sick: 0, holiday: 0 };
@@ -127,12 +110,8 @@ function buildDays(
   to: ISODate,
   movements: Movement[],
   dayEntries: DayEntry[],
-  accounts: Account[],
   attachmentCounts: Record<string, number>,
 ): ReportDay[] {
-  const accountNames = new Map(
-    accounts.map((account) => [account.id, account.name]),
-  );
   const dayMap = new Map(dayEntries.map((day) => [day.date, day]));
   const result: ReportDay[] = [];
 
@@ -147,13 +126,12 @@ function buildDays(
         endMin: movement.endMin,
         breakMin: movement.breakMin,
         category: movement.category === 'medical' ? 'medical' : 'work',
-        accountName: accountNames.get(movement.accountId) ?? 'Cuenta eliminada',
         minutes: durationMinutes(movement),
       }));
     result.push({
       date,
       kind,
-      kindLabel: KIND_LABELS[kind],
+      kindLabel: dayKindInfo(kind).label,
       movements: dayMovements,
       total: dayMovements.reduce((total, movement) => total + movement.minutes, 0),
       attachmentCount: attachmentCounts[date] ?? 0,
@@ -229,33 +207,16 @@ export async function buildPeriodReport(
         ? endOfMonth(anchor)
         : endOfYear(anchor);
 
-  const [movements, dayEntries, accounts, attachmentCounts] =
-    await Promise.all([
-      listMovementsRange(from, to),
-      listDaysRange(from, to),
-      listAccounts(true),
-      attachmentCountsRange(from, to),
-    ]);
+  const [movements, dayEntries, attachmentCounts] = await Promise.all([
+    listMovementsRange(from, to),
+    listDaysRange(from, to),
+    attachmentCountsRange(from, to),
+  ]);
 
   const absences = countAbsences(dayEntries);
   const medicalMinutes = medicalMinutesFor(movements);
   const attachmentCount = attachmentTotal(attachmentCounts);
   const attachmentDays = attachmentDayTotal(attachmentCounts);
-  const accountMinutes = new Map<string, number>();
-  for (const movement of movements) {
-    accountMinutes.set(
-      movement.accountId,
-      (accountMinutes.get(movement.accountId) ?? 0) + durationMinutes(movement),
-    );
-  }
-  const accountTotals = accounts
-    .map((account) => ({
-      name: account.name,
-      color: account.color,
-      minutes: accountMinutes.get(account.id) ?? 0,
-    }))
-    .filter((account) => account.minutes > 0)
-    .sort((a, b) => b.minutes - a.minutes);
 
   const year = parseISO(anchor).getFullYear();
   const months =
@@ -287,7 +248,6 @@ export async function buildPeriodReport(
           to,
           movements,
           dayEntries,
-          accounts,
           attachmentCounts,
         ).filter(
           (day) =>
@@ -325,7 +285,6 @@ export async function buildPeriodReport(
     medicalMinutes,
     attachmentCount,
     attachmentDays,
-    accounts: accountTotals,
     months,
   };
 }
