@@ -89,6 +89,35 @@ test('el calendario muestra el resumen del día y permite editarlo', async ({
   await expect(page.locator('.modal')).toHaveCount(0);
 });
 
+test('guarda la nota del día y la muestra en el calendario', async ({
+  page,
+}) => {
+  const todayRow = page
+    .locator('.week-day')
+    .filter({ has: page.getByText('Hoy', { exact: true }) })
+    .locator('.week-day-summary');
+  await expect(todayRow).toBeEnabled();
+  await todayRow.click();
+
+  const note = 'Revisión con el cliente';
+  const modal = page.locator('.modal');
+  await modal.locator('#day-note').fill(note);
+  await modal.getByRole('button', { name: 'Guardar día' }).click();
+  await expect(page.locator('.modal')).toHaveCount(0);
+
+  await todayRow.click();
+  await expect(page.locator('.modal').locator('#day-note')).toHaveValue(note);
+  await page.locator('.modal-head button[aria-label="Cerrar"]').click();
+  await expect(page.locator('.modal')).toHaveCount(0);
+  await expect(todayRow.locator('.week-day-note')).toHaveCount(1);
+
+  await page
+    .getByRole('button', { name: 'Calendario', exact: true })
+    .click();
+  await page.locator('.calendar-cell.today').click();
+  await expect(page.locator('.calendar-day-note')).toContainText(note);
+});
+
 test('Ajustes mantiene las acciones avanzadas plegadas', async ({ page }) => {
   await page.getByRole('button', { name: 'Ajustes', exact: true }).click();
   const toggle = page.getByRole('button', { name: 'Avanzado', exact: true });

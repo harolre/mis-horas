@@ -405,7 +405,7 @@ export function DayEditorSheet({
       subtitle={
         editor
           ? `${formatLongDate(date)} · Borrador`
-          : 'Horas y adjuntos'
+          : 'Horas, adjuntos y nota'
       }
       onClose={requestClose}
       dismissible={!saving && !editor}
@@ -780,6 +780,23 @@ export function DayEditorSheet({
           Los adjuntos se optimizan automáticamente. Se guardan al pulsar
           «Guardar día».
         </p>
+      </div>
+
+      <div className="sheet-section day-note-block">
+        <label className="field-label" htmlFor="day-note">
+          Nota del día
+        </label>
+        <textarea
+          id="day-note"
+          className="textarea"
+          value={note}
+          maxLength={800}
+          onChange={(event) => setNote(event.target.value)}
+          placeholder="Ej. incidencia, tarea principal…"
+        />
+        <span className="field-hint">
+          Se guardará al pulsar «Guardar día».
+        </span>
       </div>
 
       {hasData ? (

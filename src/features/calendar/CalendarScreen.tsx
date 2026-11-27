@@ -457,6 +457,13 @@ export function CalendarScreen({
               </p>
             )}
 
+            {selectedDay?.note?.trim() ? (
+              <div className="calendar-day-note">
+                <Icon name="note" size={14} />
+                <span>{selectedDay.note}</span>
+              </div>
+            ) : null}
+
             {selectedDay?.attachmentCount ? (
               <div className="calendar-day-attach">
                 <Icon name="paperclip" size={14} />

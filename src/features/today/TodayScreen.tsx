@@ -36,6 +36,7 @@ interface WeekDayRow {
   excess: number;
   kind: DayKind;
   attachmentCount: number;
+  note?: string;
 }
 
 export function TodayScreen({
@@ -78,6 +79,7 @@ export function TodayScreen({
       excess: row.target > 0 ? Math.max(0, row.worked - row.target) : 0,
       kind: entry?.kind ?? 'work',
       attachmentCount: entry?.attachmentCount ?? 0,
+      note: entry?.note,
     };
   });
 
@@ -254,6 +256,11 @@ export function TodayScreen({
                     {row.kind !== 'work' ? (
                       <span className={`badge ${rowInfo.chipClass}`}>
                         {rowInfo.label}
+                      </span>
+                    ) : null}
+                    {row.note?.trim() ? (
+                      <span className="week-day-note" title="Nota del día">
+                        <Icon name="note" size={12} />
                       </span>
                     ) : null}
                     {row.attachmentCount > 0 ? (

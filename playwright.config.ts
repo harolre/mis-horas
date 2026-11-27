@@ -13,7 +13,7 @@ export default defineConfig({
     timeout: 10_000,
   },
   use: {
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL: 'http://127.0.0.1:4174',
     channel,
     headless: true,
     locale: 'es-ES',
@@ -23,9 +23,9 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: 'npm run dev -- --host 127.0.0.1 --port 5173',
-    url: 'http://127.0.0.1:5173',
-    reuseExistingServer: true,
+    command: 'npm run dev -- --host 127.0.0.1 --port 4174 --strictPort',
+    url: 'http://127.0.0.1:4174',
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 });

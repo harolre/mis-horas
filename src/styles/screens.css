@@ -78,7 +78,8 @@
   font-variant-numeric: tabular-nums;
 }
 
-.week-day-attach {
+.week-day-attach,
+.week-day-note {
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -160,6 +161,12 @@
 
 .sheet-section .day-section-head {
   margin-bottom: 0;
+}
+
+.day-note-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .sheet-save-hint {
@@ -882,6 +889,26 @@
 
 .calendar-day-empty {
   padding: 4px 0;
+}
+
+.calendar-day-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 0.84rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.calendar-day-note svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--text-3);
 }
 
 .calendar-day-attach {

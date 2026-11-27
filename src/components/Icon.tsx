@@ -12,6 +12,7 @@ export type IconName =
   | 'trash'
   | 'edit'
   | 'paperclip'
+  | 'note'
   | 'download'
   | 'upload'
   | 'close'
@@ -82,6 +83,12 @@ const paths: Record<IconName, ReactNode> = {
   ),
   paperclip: (
     <path d="M20 11l-8.5 8.5a5 5 0 0 1-7-7L13 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 6" />
+  ),
+  note: (
+    <>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z" />
+      <path d="M14 3v5h5M8 13h8M8 17h5" />
+    </>
   ),
   download: (
     <>

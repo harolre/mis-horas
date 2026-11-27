@@ -18,7 +18,7 @@ No tiene backend, no sincroniza datos y no envía información a ningún servido
 - Exportación del resumen a PDF por semana, mes o año, con detalle diario y marcas de adjuntos.
 - Calendario mensual con resumen del mes, indicadores de horas, ausencias y adjuntos. Al tocar un día se muestra su resumen y se puede editar sin salir del calendario.
 - Estados de día: trabajo, vacaciones, asunto propio, festivo y baja. Vacaciones, asuntos propios, festivos y bajas reducen el objetivo diario y se distinguen por color en los resúmenes; no se suman como horas trabajadas.
-- Notas por día.
+- Notas por día, editables en la hoja del día y visibles en el calendario y en la vista semanal.
 - Adjuntos de imágenes y PDF, con miniaturas y límites de tamaño.
 - Compresión de imágenes y optimización de PDF (sin pérdida cuando es posible, con rasterización como alternativa).
 - Copias de seguridad cifradas separadas: datos en `.mhdata` y adjuntos por año en `.mhatt`. Se mantiene compatibilidad con las copias antiguas `.mhbackup`.
